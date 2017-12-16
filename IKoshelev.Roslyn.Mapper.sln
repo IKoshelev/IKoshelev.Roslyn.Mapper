@@ -1,13 +1,17 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.26730.16
+VisualStudioVersion = 15.0.27004.2010
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IKoshelev.Roslyn.Mapper", "IKoshelev.Roslyn.Mapper\IKoshelev.Roslyn.Mapper\IKoshelev.Roslyn.Mapper.csproj", "{A163D2FF-CAE6-41D4-A2A8-C1B187AEE0AF}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IKoshelev.Roslyn.Mapper.Test", "IKoshelev.Roslyn.Mapper\IKoshelev.Roslyn.Mapper.Test\IKoshelev.Roslyn.Mapper.Test.csproj", "{F434EE6B-A4C7-4879-9290-899D8A7C307C}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IKoshelev.Roslyn.Mapper.Vsix", "IKoshelev.Roslyn.Mapper\IKoshelev.Roslyn.Mapper.Vsix\IKoshelev.Roslyn.Mapper.Vsix.csproj", "{0F0040EA-F423-482F-8DB9-594E87BCA3A9}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "IKoshelev.Mapper", "IKoshelev.Mapper\IKoshelev.Mapper.csproj", "{9DC9192E-111D-423A-9600-C5267608216A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "IKoshelev.Mapper.Test", "IKoshelev.Mapper.Test\IKoshelev.Mapper.Test.csproj", "{46894CCD-61D5-4053-BF16-122AEE7F6CB4}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -27,6 +31,14 @@ Global
 		{0F0040EA-F423-482F-8DB9-594E87BCA3A9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0F0040EA-F423-482F-8DB9-594E87BCA3A9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0F0040EA-F423-482F-8DB9-594E87BCA3A9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9DC9192E-111D-423A-9600-C5267608216A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9DC9192E-111D-423A-9600-C5267608216A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9DC9192E-111D-423A-9600-C5267608216A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9DC9192E-111D-423A-9600-C5267608216A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{46894CCD-61D5-4053-BF16-122AEE7F6CB4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{46894CCD-61D5-4053-BF16-122AEE7F6CB4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{46894CCD-61D5-4053-BF16-122AEE7F6CB4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{46894CCD-61D5-4053-BF16-122AEE7F6CB4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
