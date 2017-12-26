@@ -96,6 +96,38 @@ namespace ConsoleApplication1
         }
 
         [TestMethod]
+        public void OnlyDefaultMappingsAreRequired()
+        {
+            var test = @"
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Text;
+    using System.Threading.Tasks;
+    using System.Diagnostics;
+    using IKoshelev.Mapper; 
+
+    namespace ConsoleApplication1
+    {
+        class Test
+        {
+            public void Test()
+            {
+                var test = new ExpressionMapper<Foo, Bar>(
+                    new ExpressionMappingComponents<Foo, Bar>(
+                        (source) => new Bar()
+                        {
+                            A = source.A,
+                            B = source.B,
+                        }));
+            }
+        }
+    }" + ClassDefinitions;
+
+            VerifyCSharpDiagnostic(test);
+        }
+
+        [TestMethod]
         public void OnStructuralProblemItIsReporpted()
         {
             var test = @"
