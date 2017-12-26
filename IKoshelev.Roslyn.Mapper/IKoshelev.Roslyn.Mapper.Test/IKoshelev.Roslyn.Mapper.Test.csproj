@@ -102,6 +102,10 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\IKoshelev.Mapper\IKoshelev.Mapper.csproj">
+      <Project>{9dc9192e-111d-423a-9600-c5267608216a}</Project>
+      <Name>IKoshelev.Mapper</Name>
+    </ProjectReference>
     <ProjectReference Include="..\IKoshelev.Roslyn.Mapper\IKoshelev.Roslyn.Mapper.csproj">
       <Project>{A163D2FF-CAE6-41D4-A2A8-C1B187AEE0AF}</Project>
       <Name>IKoshelev.Roslyn.Mapper</Name>

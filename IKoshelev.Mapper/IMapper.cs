@@ -4,27 +4,29 @@ using System.Text;
 
 namespace IKoshelev.Mapper
 {
-    public interface IMapper<TSource, TDestination>
+    public interface IMapper<TSource, TDestination> where TDestination : new()
     {
         TDestination Map(TSource source);
 
         void Map(TSource source, TDestination destination);
-
-        IMappingComponents<TSource, TDestination> MappingComponents
-        {
-            get;
-        }
     }
 
-    public class MapperBase<TSource, TDestination> : IMapper<TSource, TDestination>
+    public class ExpressionMapper<TSource, TDestination> : IMapper<TSource, TDestination> where TDestination : new()
     {
-        public MapperBase(MappingComponentsBase<TSource, TDestination> mappingComponents)
+        public ExpressionMapper(ExpressionMappingComponents<TSource, TDestination> mappingComponents)
         {
             MappingComponents = mappingComponents;
-            compiledMappingFunction = mappingComponents.CombinedMappings.Compile();
+            compiledMappingFunctionWithConstructor = mappingComponents
+                                                        .CombinedMappingsWithConstructor
+                                                        .Compile();
+
+            compiledMappingFunctionForExisting = mappingComponents
+                                                        .CombinedMappingsForExistingTarget
+                                                        .Compile();
         }
 
-        internal Func<TSource, TDestination> compiledMappingFunction;
+        internal Func<TSource, TDestination> compiledMappingFunctionWithConstructor;
+        internal Action<TSource, TDestination> compiledMappingFunctionForExisting;
 
         public IMappingComponents<TSource, TDestination> MappingComponents
         {
@@ -33,13 +35,35 @@ namespace IKoshelev.Mapper
 
         public TDestination Map(TSource source)
         {
-            var result = compiledMappingFunction(source);
+            var result = compiledMappingFunctionWithConstructor(source);
             return result;
         }
 
         public void Map(TSource source, TDestination destination)
         {
-            throw new System.NotImplementedException();
+            compiledMappingFunctionForExisting(source, destination);
+        }
+    }
+
+    public class DelegateMapper<TSource, TDestination> : IMapper<TSource, TDestination> where TDestination : new()
+    {
+        public DelegateMapper(Action<TSource, TDestination> map)
+        {
+            this.map = map ?? throw new ArgumentNullException(nameof(map));
+        }
+
+        private Action<TSource, TDestination> map;
+
+        public TDestination Map(TSource source)
+        {
+            TDestination destination = new TDestination();
+            Map(source, destination);
+            return destination;
+        }
+
+        public void Map(TSource source, TDestination destination)
+        {
+            map(source, destination);
         }
     }
 }

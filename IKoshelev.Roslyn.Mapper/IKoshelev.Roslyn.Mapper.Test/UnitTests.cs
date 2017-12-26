@@ -11,19 +11,48 @@ namespace IKoshelev.Roslyn.Mapper.Test
     [TestClass]
     public class UnitTest : CodeFixVerifier
     {
+        public const string ClassDefinitions =
+@"
+namespace ConsoleApplication1
+{
+    public class Foo
+    {
+        public int A { get; set; }
+        public int B { get; set; }
+        public int C { get; set; }
+        public int[] D { get; set; }
+        public Bar E { get; set; }
+        public int Ignore1 {get;set;}
+    }
+
+    public class Bar
+    {
+        public Bar() { }
+
+        public Bar(int a)
+        {
+            A = a;
+        }
+
+        public int A { get; set; }
+        public int B { get; set; }
+        public int C { get; set; }
+        public Bar E { get; set; }
+        public int Ignore2 {get;set;}
+    }
+}";
 
         //No diagnostics expected to show up
         [TestMethod]
-        public void TestMethod1()
+        public void OnEmptyFileNoDiagnostics()
         {
             var test = @"";
 
             VerifyCSharpDiagnostic(test);
         }
 
-        //Diagnostic and CodeFix both triggered and checked for
         [TestMethod]
-        public void TestMethod2()
+        public void OnPropperStructureEverythingIsOk()
         {
             var test = @"
     using System;
@@ -32,41 +61,106 @@ namespace IKoshelev.Roslyn.Mapper.Test
     using System.Text;
     using System.Threading.Tasks;
     using System.Diagnostics;
+    using IKoshelev.Mapper; 
 
     namespace ConsoleApplication1
     {
-        class TypeName
-        {   
-        }
-    }";
-            var expected = new DiagnosticResult
+        class Test
+        {
+            public void Test()
             {
-                Id = "IKoshelevRoslynMapper",
-                Message = String.Format("Type name '{0}' contains lowercase letters", "TypeName"),
-                Severity = DiagnosticSeverity.Warning,
-                Locations =
-                    new[] {
-                            new DiagnosticResultLocation("Test0.cs", 11, 15)
-                        }
-            };
+                var test = new ExpressionMapper<Foo, Bar>(
+                    new ExpressionMappingComponents<Foo, Bar>(
+                        (source) => new Bar()
+                        {
+                            A = source.A,
+                            B = source.B,
+                        },
+                        customMappings: (source) => new Bar()
+                        {
+                            C = 15
+                        },
+                        sourceIgnoredProperties: new Expression<Func<Foo, object>>[]
+                        {
+                            x => x.Ignore1
+                        },
+                        targetIgnoredProperties: new Expression<Func<Foo, object>>[]
+                        {
+                            x => x.Ignore2
+                        }));
+            }
+        }
+    }" + ClassDefinitions;
 
-            VerifyCSharpDiagnostic(test, expected);
+            VerifyCSharpDiagnostic(test);
+        }
 
-            var fixtest = @"
+        [TestMethod]
+        public void OnStructuralProblemItIsReporpted()
+        {
+            var test = @"
     using System;
     using System.Collections.Generic;
     using System.Linq;
     using System.Text;
     using System.Threading.Tasks;
     using System.Diagnostics;
+    using IKoshelev.Mapper; 
 
     namespace ConsoleApplication1
     {
-        class TYPENAME
-        {   
+        class Test
+        {
+            public void Test()
+            {
+                var bad =  new Expression<Func<Foo, object>>[0];
+
+                var test = new ExpressionMapper<Foo, Bar>(
+                    new ExpressionMappingComponents<Foo, Bar>(
+                        null,
+                        customMappings: null,
+                        sourceIgnoredProperties: bad,
+                        targetIgnoredProperties: null));
+            }
         }
-    }";
-            VerifyCSharpFix(test, fixtest);
+    }" + ClassDefinitions;
+
+            DiagnosticResult Diagnostics(string message, int line, int column)
+            {
+                return new DiagnosticResult
+                {
+                    Id = "IKoshelevRoslynMapper",
+                    Message = String.Format(IKoshelevRoslynMapperAnalyzer.MappingDefinitionStructuralIntegrityRuleMessageFormat, message),
+                    Severity = DiagnosticSeverity.Error,
+                    Locations =
+                    new[] {
+                            new DiagnosticResultLocation("Test0.cs", line, column)
+                        }
+                };
+            }
+
+            VerifyCSharpDiagnostic(test, 
+                Diagnostics("\"defaultMappings\" not found.", 19,21),
+                Diagnostics("Argument for \"defaultMappings\" could not be processed.", 20, 25),
+                Diagnostics("Argument for \"customMappings\" could not be processed.", 21, 25),
+                Diagnostics("Argument for \"sourceIgnoredProperties\" could not be processed.", 22, 25),
+                Diagnostics("Argument for \"targetIgnoredProperties\" could not be processed.", 23, 25));
+
+    //        var fixtest = @"
+    //using System;
+    //using System.Collections.Generic;
+    //using System.Linq;
+    //using System.Text;
+    //using System.Threading.Tasks;
+    //using System.Diagnostics;
+
+    //namespace ConsoleApplication1
+    //{
+    //    class TYPENAME
+    //    {   
+    //    }
+    //}";
+    //        VerifyCSharpFix(test, fixtest);
         }
 
         protected override CodeFixProvider GetCSharpCodeFixProvider()

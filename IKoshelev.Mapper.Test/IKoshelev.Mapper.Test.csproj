@@ -45,7 +45,8 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="MemberInitBindingsCombinerTest.cs" />
+    <Compile Include="ExpressionCombinerTest.cs" />
+    <Compile Include="MapperAcceptanceTest.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Subjects.cs" />
   </ItemGroup>

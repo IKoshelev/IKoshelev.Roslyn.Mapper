@@ -4,18 +4,24 @@ using System.Linq.Expressions;
 using System.Linq;
 using System.Text;
 
-namespace IKoshelev.Mapper.MemberInitBindingsCombiner
+namespace IKoshelev.Mapper.ExpressionCombiner
 {
-    public class MemberInitBindingsCombiner<TSource, TDestination>
+    public class ExpressionCombiner<TSource, TDestination>
     {
         public Expression<Func<TSource, TDestination>> CombineIntoMapperWithConstructor(         
             Expression<Func<TSource, TDestination>> recipientExpression,
             Expression<Func<TSource, TDestination>> donorExpression)
         {
+            var paramReplacer = new ParameterReplacerVisitor(
+                                                    donorExpression.Parameters[0],
+                                                    recipientExpression.Parameters[0]);
+
+            var donorWithCorrectedParam = (Expression<Func<TSource, TDestination>>)paramReplacer.Visit(donorExpression);
+
             var visitor = new MemberInitBindingsCombinationVisitor<TSource, TDestination>()
             {               
                 recipientExpression = recipientExpression,
-                donorExpression = donorExpression
+                donorExpression = donorWithCorrectedParam
             };
 
             var combinedExpr = (Expression<Func<TSource, TDestination>>) visitor.Visit(recipientExpression);

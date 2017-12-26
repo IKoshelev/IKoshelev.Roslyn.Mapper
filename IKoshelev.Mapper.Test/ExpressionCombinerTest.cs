@@ -4,17 +4,17 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Text;
-using IKoshelev.Mapper.MemberInitBindingsCombiner;
+using IKoshelev.Mapper.ExpressionCombiner;
 
 namespace IKoshelev.Mapper.Test
 {
     [TestFixture]
-    public class MemberInitBindingsCombinerTest
+    public class ExpressionCombinerTest
     {
         [Test]
         public void DoesNotThrowOnEmptyInitializers()
         {
-            var combiner = new MemberInitBindingsCombiner<Foo, Bar>();
+            var combiner = new ExpressionCombiner<Foo, Bar>();
 
             Expression<Func<Foo, Bar>> source = (x) => new Bar { };
             Expression<Func<Foo, Bar>> target = (x) => new Bar { };
@@ -26,7 +26,7 @@ namespace IKoshelev.Mapper.Test
         [Test]
         public void CanMergeTwoBasciMemberInitLambdas()
         {
-            var combiner = new MemberInitBindingsCombiner<Foo, Bar>();
+            var combiner = new ExpressionCombiner<Foo, Bar>();
 
             Expression<Func<Foo, Bar>> source = (x) => new Bar { A = x.A };
             Expression<Func<Foo, Bar>> target = (x) => new Bar { B = x.B };
@@ -44,7 +44,7 @@ namespace IKoshelev.Mapper.Test
         [Test]
         public void CanMergeTwoAdvancedMemberInitLambdas()
         {
-            var combiner = new MemberInitBindingsCombiner<Foo, Bar>();
+            var combiner = new ExpressionCombiner<Foo, Bar>();
 
             Expression<Func<Foo, Bar>> source = (x) => new Bar { E = new Bar { A = 1 } };            
             Expression<Func<Foo, Bar>> target = (x) => new Bar { A = x.D.FirstOrDefault() };
@@ -56,7 +56,7 @@ namespace IKoshelev.Mapper.Test
         [Test]
         public void WillThrowOnIncompatibleExpressions()
         {
-            var combiner = new MemberInitBindingsCombiner<Foo, Bar>();
+            var combiner = new ExpressionCombiner<Foo, Bar>();
 
             Expression<Func<Foo, Bar>> source = (x) => new Bar { A = x.A };
             Expression<Func<Foo, Bar>> target = (x) => null;
@@ -79,7 +79,7 @@ namespace IKoshelev.Mapper.Test
         [Test]
         public void WillThrowOnConstructorsWithArguments()
         {
-            var combiner = new MemberInitBindingsCombiner<Foo, Bar>();
+            var combiner = new ExpressionCombiner<Foo, Bar>();
 
             Expression<Func<Foo, Bar>> source = (x) => new Bar(1) { B = x.B };
             Expression<Func<Foo, Bar>> target = (x) => new Bar() { C = x.C };
@@ -93,7 +93,7 @@ namespace IKoshelev.Mapper.Test
         [Test]
         public void CanProduceMapperExpressionForExistingClasses()
         {
-            var combiner = new MemberInitBindingsCombiner<Foo, Bar>();
+            var combiner = new ExpressionCombiner<Foo, Bar>();
 
             Expression<Func<Foo, Bar>> a = (x) => new Bar
             {
