@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -60,6 +61,10 @@ namespace IKoshelev.Mapper.Test
                     customMappings: (source) => new Bar()
                     {
                         C = 15
+                    },
+                    sourceIgnoredProperties: new Expression<Func<Foo, object>>[] 
+                    {
+                        x => x.A
                     }));
 
             var @new = mapper.Map(foo);

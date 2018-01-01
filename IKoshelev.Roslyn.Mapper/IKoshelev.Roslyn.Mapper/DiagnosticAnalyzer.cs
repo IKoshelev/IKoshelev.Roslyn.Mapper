@@ -58,12 +58,7 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
 
         private static void AnalyzeSymbol(SymbolAnalysisContext context)
         {
-            // TODO: Replace the following code with your own analysis, generating Diagnostic objects for any issues you find
-            //var namedTypeSymbol = (INamedTypeSymbol)context.Symbol;
-
             var syntaxReference = context.Symbol.DeclaringSyntaxReferences.Single();
-
-            //var root = syntaxReference.SyntaxTree.GetRoot();
 
             var expressionMappingComponentsConstructor = syntaxReference
                                                             .GetSyntax()
@@ -87,27 +82,63 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
 
             DiagnoseMissingRequiredComponentParts(expressionMappings);
 
-            var structuralProblems = expressionMappings
-                                            .SelectMany(component => component.Diagnostics)
-                                            .ToArray();
-
-            if (structuralProblems.Any())
+            var anyDiagnosticsEncountered = NotifyDiagnostics(context, expressionMappings);
+            if (anyDiagnosticsEncountered)
             {
-                foreach(var problem in structuralProblems)
-                {
-                    context.ReportDiagnostic(problem);
-                }
                 return;
             }
 
-            // Find just those named type symbols with names containing lowercase letters.
-            //if (namedTypeSymbol.Name.ToCharArray().Any(char.IsLower))
-            //{
-            //    // For all such symbols, produce a diagnostic.
-            //    var diagnostic = Diagnostic.Create(Rule, namedTypeSymbol.Locations[0], namedTypeSymbol.Name);
+            foreach(var expr in expressionMappings)
+            {
+                ParseSymbolsFromMappingsAndIgnores(expr);
+            }
 
-            //    context.ReportDiagnostic(diagnostic);
-            //}
+            anyDiagnosticsEncountered = NotifyDiagnostics(context, expressionMappings);
+            if (anyDiagnosticsEncountered)
+            {
+                return;
+            }
+        }
+
+        private static void ParseSymbolsFromMappingsAndIgnores(ExpressionMappingComponent expr)
+        {
+            expr.SymbolsIgnoredInSource = ParseIgnoreList(
+                                                    expr.SourceTypeSymbol,
+                                                    expr.IgnoreInSource,
+                                                    expr.Diagnostics);
+
+            expr.SymbolsIgnoredInTarget = ParseIgnoreList(
+                                                  expr.TargetTypeSymbol,
+                                                  expr.IgnoreInTarget,
+                                                  expr.Diagnostics);
+
+            var touchedProps = ParseTouchedPropsFromMapping(
+                                                    expr.SourceTypeSymbol,
+                                                    expr.TargetTypeSymbol,
+                                                    expr.DefaultMappings,
+                                                    expr.Diagnostics);
+
+            expr.SymbolsMappedInSource = touchedProps.sourceProps;
+            expr.SymbolsMappedInTarget = touchedProps.targetProps;
+        }
+
+        private static bool NotifyDiagnostics(SymbolAnalysisContext context, ExpressionMappingComponent[] components)
+        {
+            var structuralProblems = components
+                                         .SelectMany(component => component.Diagnostics)
+                                         .ToArray();
+
+            if (structuralProblems.Any() == false)
+            {          
+                return false;
+            }
+
+            foreach (var problem in structuralProblems)
+            {
+                context.ReportDiagnostic(problem);
+            }
+
+            return true;
         }
 
         private static void DiagnoseMissingRequiredComponentParts(ExpressionMappingComponent[] components)
@@ -119,10 +150,22 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                     var diag = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, component.CreationExpressionSyntax.GetLocation(), "\"defaultMappings\" not found.");
                     component.Diagnostics.Add(diag);
                 }
+
+                if(component.SourceTypeSyntax == null || component.SourceTypeSymbol == null)
+                {
+                    var diag = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, component.CreationExpressionSyntax.GetLocation(), "Source type could not be resolved.");
+                    component.Diagnostics.Add(diag);
+                }
+
+                if (component.TargetTypeSyntax == null || component.TargetTypeSymbol == null)
+                {
+                    var diag = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, component.CreationExpressionSyntax.GetLocation(), "Target type could not be resolved.");
+                    component.Diagnostics.Add(diag);
+                }
             }
         }
 
-        private static ObjectCreationExpressionSyntax[] GetRelevantObjectCreations(SymbolAnalysisContext context, ObjectCreationExpressionSyntax[] expressionMappingComponentsConstructor, SemanticModel semanticModel)
+        public static ObjectCreationExpressionSyntax[] GetRelevantObjectCreations(SymbolAnalysisContext context, ObjectCreationExpressionSyntax[] expressionMappingComponentsConstructor, SemanticModel semanticModel)
         {
             var unboundGenericTypeName = typeof(ExpressionMappingComponents<,>).FullName;
 
@@ -144,20 +187,20 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
             component.CreationExpressionSyntax = creationSyntax;
 
             var typeArguments = creationSyntax
-                                        .Type
-                                        .ChildNodes()
-                                        .OfType<TypeArgumentListSyntax>()
-                                        .Single();
+                                            .Type
+                                            .ChildNodes()
+                                            .OfType<TypeArgumentListSyntax>()
+                                            .Single();
 
             var typeArgSyntaxes = typeArguments
-                                        .ChildNodes()
-                                        .OfType<IdentifierNameSyntax>()
-                                        .ToArray();
+                                            .ChildNodes()
+                                            .OfType<IdentifierNameSyntax>()
+                                            .ToArray();
 
             component.SourceTypeSyntax = typeArgSyntaxes[0];
-            component.SourceTypeSymbol = semanticModel.GetSymbolInfo(component.SourceTypeSyntax);
+            component.SourceTypeSymbol = semanticModel.GetSymbolInfo(component.SourceTypeSyntax).Symbol as INamedTypeSymbol;
             component.TargetTypeSyntax = typeArgSyntaxes[1];
-            component.TargetTypeSymbol = semanticModel.GetSymbolInfo(component.TargetTypeSyntax);
+            component.TargetTypeSymbol = semanticModel.GetSymbolInfo(component.TargetTypeSyntax).Symbol as INamedTypeSymbol;
 
             var arguments = creationSyntax.ArgumentList.ChildNodes().ToArray();
 
@@ -245,6 +288,164 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
             var symbolFullName = $"{symbol.ContainingNamespace.ToString()}.{symbol.MetadataName}";
             return unboundGenericTypeFullName == symbolFullName;
         }
+
+        public static ISymbol[] GetPublicFieldsAndProperties(INamedTypeSymbol symbol)
+        {
+            var members = symbol
+                            .GetMembers()
+                            .Where(subSymbol =>
+                                    subSymbol.DeclaredAccessibility == Accessibility.Public
+                                    && (subSymbol is IPropertySymbol 
+                                        || subSymbol is IFieldSymbol))
+                            .ToArray();
+
+            return members;
+        }
+
+        public static ISymbol[] ParseIgnoreList(INamedTypeSymbol ownerType, ArrayCreationExpressionSyntax arraySyntax, List<Diagnostic> diagnostics)
+        {         
+            try
+            {
+                var lambdas = arraySyntax
+                     .Initializer
+                     .ChildNodes()
+                     .ToArray();
+
+                var impropperLambdas = lambdas
+                                            .Where(x => x.Fits(SyntaxKind.SimpleLambdaExpression) == false)
+                                            .ToArray();
+
+                if (impropperLambdas.Any())
+                {
+                    foreach (var impropperLambda in impropperLambdas)
+                    {
+                        var lambdaText = impropperLambda.GetText().ToString().Trim();
+                        var diag = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, arraySyntax.GetLocation(),
+                                                    $"Array contains impropper lambdas {lambdaText}");
+                        diagnostics.Add(diag);
+                    }
+                    return new ISymbol[0];
+                }
+
+                var propperLambdas = lambdas.OfType<SimpleLambdaExpressionSyntax>();
+
+                var memberSymbols = propperLambdas
+                                        .Select(lambda => GetFieldOrPropertySymbolFromSimpleLambda(
+                                                                                                ownerType,
+                                                                                                lambda,
+                                                                                                diagnostics))
+                                        .ToArray();
+
+                return memberSymbols;
+            }
+            catch
+            {
+                var arrayText = arraySyntax.GetText().ToString().Trim();
+                var diag = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, arraySyntax.GetLocation(),
+                                            $"Could not process array: {arrayText}");
+                diagnostics.Add(diag);
+                return new ISymbol[0];
+            }
+        }
+
+        public static 
+            (ISymbol[] sourceProps, ISymbol[] targetProps) 
+                ParseTouchedPropsFromMapping(INamedTypeSymbol sourceType, INamedTypeSymbol targetType, ParenthesizedLambdaExpressionSyntax lambda, List<Diagnostic> diagnostics)
+        {
+            try
+            {
+                var sourceIdentifierName = lambda
+                                            .ChildNodes().OfType<ParameterListSyntax>().Single()
+                                            .ChildNodes().OfType<ParameterSyntax>().Single()
+                                            .ChildTokens().Single().ToString().Trim();
+
+                var assignments = lambda
+                                    .ChildNodes().OfType<ObjectCreationExpressionSyntax>().Single()
+                                    .ChildNodes().OfType<InitializerExpressionSyntax>().Single()
+                                    .ChildNodes().OfType<AssignmentExpressionSyntax>()
+                                    .ToArray();
+
+                var touchedTargetProps = assignments
+                                                .Select(x => x.ChildNodes().OfType<IdentifierNameSyntax>().First())
+                                                .Select(x => x.GetText().ToString().Trim())
+                                                .Select(name => sourceType.GetMembers(name).Single())
+                                                .ToArray();
+
+                var touchedSourceProps = lambda
+                                            .DescendantNodes().OfType<MemberAccessExpressionSyntax>()
+                                            .Where(node => node.Expression.Fits(SyntaxKind.IdentifierName)
+                                                            && node.Expression.ToString().Trim() == sourceIdentifierName)
+                                            .Select(x => x.Name.GetText().ToString().Trim())
+                                            .Select(name => targetType.GetMembers(name).Single())
+                                            .ToArray();
+
+                return (touchedSourceProps, touchedTargetProps);
+            }
+            catch
+            {
+                var lambdaText = lambda.GetText().ToString().Trim();
+                var diag = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, lambda.GetLocation(),
+                                            $"Could not process lambda: {lambdaText}");
+                diagnostics.Add(diag);
+                return (new ISymbol[0], new ISymbol[0]);
+            }           
+        }
+
+            public static ISymbol GetFieldOrPropertySymbolFromSimpleLambda(INamedTypeSymbol ownerType, SimpleLambdaExpressionSyntax lambda, List<Diagnostic> diagnostics)
+        {
+            var lambdaText = lambda.GetText().ToString().Trim();
+            string memberName = null;
+
+            try
+            {
+                memberName = lambda
+                                .ChildNodes()
+                                .OfType<MemberAccessExpressionSyntax>()
+                                .Single()
+                                .Name
+                                .GetText()
+                                .ToString()
+                                .Trim();
+            }
+            catch
+            {
+                var diag = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, lambda.GetLocation(), 
+                                            $"Lambda must be simple, i.e. x => x.A; Could not process lambda {lambdaText}");
+                diagnostics.Add(diag);
+            }
+
+            if(memberName == null)
+            {
+                return null;
+            }
+
+            ISymbol memberSymbol = null; 
+            try
+            { 
+                memberSymbol = ownerType
+                                    .GetMembers(memberName)
+                                    .Single();
+            }
+            catch
+            {            
+                var diag = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, lambda.GetLocation(), 
+                                                $"Could not find single member by name {memberName} in type {ownerType.Name}");
+                diagnostics.Add(diag);
+            }
+
+            if(memberSymbol is IPropertySymbol
+               || memberSymbol is IFieldSymbol)
+            {
+                return memberSymbol;
+            }
+
+            var diag2 = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, lambda.GetLocation(), 
+                                          $"{ownerType.Name} resolves to symbol {memberSymbol.GetType().ToString()}. " +
+                                          $"Only fields and properties allowed.");
+            diagnostics.Add(diag2);
+
+            return null;
+        }
     }
 
     public class ExpressionMappingComponent
@@ -254,12 +455,17 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
         public ObjectCreationExpressionSyntax CreationExpressionSyntax { get; set; }
         public IdentifierNameSyntax SourceTypeSyntax { get; set; }
         public IdentifierNameSyntax TargetTypeSyntax { get; set; }
-        public SymbolInfo SourceTypeSymbol { get; set; }
-        public SymbolInfo TargetTypeSymbol { get; set; }
+        public INamedTypeSymbol SourceTypeSymbol { get; set; }
+        public INamedTypeSymbol TargetTypeSymbol { get; set; }
 
         public ParenthesizedLambdaExpressionSyntax DefaultMappings { get; set; }
         public ParenthesizedLambdaExpressionSyntax CustomMappings { get; set; }
         public ArrayCreationExpressionSyntax IgnoreInSource { get; set; }
         public ArrayCreationExpressionSyntax IgnoreInTarget { get; set; }
+
+        public ISymbol[] SymbolsIgnoredInSource { get; set; }
+        public ISymbol[] SymbolsIgnoredInTarget { get; set; }
+        public ISymbol[] SymbolsMappedInSource { get; set; }
+        public ISymbol[] SymbolsMappedInTarget { get; set; }
     }
 }

@@ -148,7 +148,7 @@ namespace ConsoleApplication1
                 var bad =  new Expression<Func<Foo, object>>[0];
 
                 var test = new ExpressionMapper<Foo, Bar>(
-                    new ExpressionMappingComponents<Foo, Bar>(
+                    new ExpressionMappingComponents<Bad1, Bad2>(
                         null,
                         customMappings: null,
                         sourceIgnoredProperties: bad,
@@ -173,6 +173,8 @@ namespace ConsoleApplication1
 
             VerifyCSharpDiagnostic(test, 
                 Diagnostics("\"defaultMappings\" not found.", 19,21),
+                Diagnostics("Source type could not be resolved.", 19, 21),
+                Diagnostics("Target type could not be resolved.", 19, 21),
                 Diagnostics("Argument for \"defaultMappings\" could not be processed.", 20, 25),
                 Diagnostics("Argument for \"customMappings\" could not be processed.", 21, 25),
                 Diagnostics("Argument for \"sourceIgnoredProperties\" could not be processed.", 22, 25),
