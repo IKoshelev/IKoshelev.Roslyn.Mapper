@@ -62,10 +62,9 @@ namespace IKoshelev.Mapper.Test
                     {
                         C = 15
                     },
-                    sourceIgnoredProperties: new Expression<Func<Foo, object>>[] 
-                    {
+                    sourceIgnoredProperties: new IgnoreList<Foo>(
                         x => x.A
-                    }));
+                    )));
 
             var @new = mapper.Map(foo);
             Assert.AreEqual(@new.A, 5);

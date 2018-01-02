@@ -32,14 +32,12 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                         {
                             B = 15
                         },
-                        sourceIgnoredProperties: new Expression<Func<Foo, object>>[]    // optional
-                        {
+                        sourceIgnoredProperties:  new IgnoreList<Src>(
                             x => x.Ignore1
-                        },
-                        targetIgnoredProperties: new Expression<Func<Foo, object>>[]    // optional
-                        {
+                        ),
+                        targetIgnoredProperties: new IgnoreList<Trg>(
                             x => x.Ignore2
-                        }));
+                        )));
 ";
         private const string Category = "Roslyn.Mapper";
 
@@ -303,8 +301,8 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
         {
             component.DefaultMappings = TryGetArgumentValueSyntax<ParenthesizedLambdaExpressionSyntax>(0, "defaultMappings", arguments, component.Diagnostics);
             component.CustomMappings = TryGetArgumentValueSyntax<ParenthesizedLambdaExpressionSyntax>(1, "customMappings", arguments, component.Diagnostics);
-            component.IgnoreInSource = TryGetArgumentValueSyntax<ArrayCreationExpressionSyntax>(2, "sourceIgnoredProperties", arguments, component.Diagnostics);
-            component.IgnoreInTarget = TryGetArgumentValueSyntax<ArrayCreationExpressionSyntax>(3, "targetIgnoredProperties", arguments, component.Diagnostics);
+            component.IgnoreInSource = TryGetArgumentValueSyntax<ObjectCreationExpressionSyntax>(2, "sourceIgnoredProperties", arguments, component.Diagnostics);
+            component.IgnoreInTarget = TryGetArgumentValueSyntax<ObjectCreationExpressionSyntax>(3, "targetIgnoredProperties", arguments, component.Diagnostics);
         }
 
         private static T TryGetArgumentValueSyntax<T>(int index,string name, SyntaxNode[] arguments, List<Diagnostic> diagnostics) where T : class
@@ -410,13 +408,14 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
             return members;
         }
 
-        public static ISymbol[] ParseIgnoreList(INamedTypeSymbol ownerType, ArrayCreationExpressionSyntax arraySyntax, List<Diagnostic> diagnostics)
+        public static ISymbol[] ParseIgnoreList(INamedTypeSymbol ownerType, ObjectCreationExpressionSyntax ignoreSyntax, List<Diagnostic> diagnostics)
         {         
             try
             {
-                var lambdas = arraySyntax
-                                     ?.Initializer
+                var lambdas = ignoreSyntax
+                                     ?.ArgumentList
                                      .ChildNodes()
+                                     .Select(argument => argument.ChildNodes().Single())
                                      .ToArray() ?? new SyntaxNode[0];
 
                 var impropperLambdas = lambdas
@@ -428,8 +427,8 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                     foreach (var impropperLambda in impropperLambdas)
                     {
                         var lambdaText = impropperLambda.GetText().ToString().Trim();
-                        var diag = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, arraySyntax.GetLocation(),
-                                                    $"Array contains impropper lambdas {lambdaText}");
+                        var diag = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, ignoreSyntax.GetLocation(),
+                                                    $"Array contains impropper lambda ({lambdaText})");
                         diagnostics.Add(diag);
                     }
                     return new ISymbol[0];
@@ -448,8 +447,8 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
             }
             catch
             {
-                var arrayText = arraySyntax.GetText().ToString().Trim();
-                var diag = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, arraySyntax.GetLocation(),
+                var arrayText = ignoreSyntax.GetText().ToString().Trim();
+                var diag = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, ignoreSyntax.GetLocation(),
                                             $"Could not process array: {arrayText}");
                 diagnostics.Add(diag);
                 return new ISymbol[0];
@@ -570,8 +569,8 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
 
         public ParenthesizedLambdaExpressionSyntax DefaultMappings { get; set; }
         public ParenthesizedLambdaExpressionSyntax CustomMappings { get; set; }
-        public ArrayCreationExpressionSyntax IgnoreInSource { get; set; }
-        public ArrayCreationExpressionSyntax IgnoreInTarget { get; set; }
+        public ObjectCreationExpressionSyntax IgnoreInSource { get; set; }
+        public ObjectCreationExpressionSyntax IgnoreInTarget { get; set; }
 
         public ISymbol[] SymbolsIgnoredInSource { get; set; }
         public ISymbol[] SymbolsIgnoredInTarget { get; set; }

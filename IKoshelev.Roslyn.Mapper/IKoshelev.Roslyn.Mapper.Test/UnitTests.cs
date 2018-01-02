@@ -76,14 +76,12 @@ namespace ConsoleApplication1
                         {
                             C = 15
                         },
-                        sourceIgnoredProperties: new Expression<Func<Src, object>>[]
-                        {
+                        sourceIgnoredProperties: new IgnoreList<Src>(
                             x => x.Ignore1
-                        },
-                        targetIgnoredProperties: new Expression<Func<Src, object>>[]
-                        {
+                        ),
+                        targetIgnoredProperties: new IgnoreList<Trg>(
                             x => x.Ignore2
-                        }));
+                        )));
             }
         }
     }" + ClassDefinitions;

@@ -4,10 +4,10 @@ using IKoshelev.Mapper.ExpressionCombiner;
 
 namespace IKoshelev.Mapper
 {
-    public interface IMappingComponents<TSource, TDestination> where TDestination: new()
+    public interface IMappingComponents<TSource, TDestination> where TDestination : new()
     {
-        Expression<Func<TSource, object>>[] SourceIgnoredProperties { get; }
-        Expression<Func<TDestination, object>>[] TargetIgnoredProperties { get; }
+        IgnoreList<TSource> SourceIgnoredProperties { get; }
+        IgnoreList<TDestination> TargetIgnoredProperties { get; }
         Expression<Func<TSource, TDestination>> DefaultMappings { get; }
         Expression<Func<TSource, TDestination>> CustomMappings { get; }
         Expression<Func<TSource, TDestination>> CombinedMappingsWithConstructor { get; }
@@ -19,17 +19,17 @@ namespace IKoshelev.Mapper
         public ExpressionMappingComponents(
             Expression<Func<TSource, TDestination>> defaultMappings,
             Expression<Func<TSource, TDestination>> customMappings = null,
-            Expression<Func<TSource, object>>[] sourceIgnoredProperties = null,
-            Expression<Func<TDestination, object>>[] targetIgnoredProperties = null)
+            IgnoreList<TSource> sourceIgnoredProperties = null,
+            IgnoreList<TDestination> targetIgnoredProperties = null)
         {
             DefaultMappings = defaultMappings ?? throw new ArgumentNullException(nameof(defaultMappings));
             CustomMappings = customMappings;
-            SourceIgnoredProperties = sourceIgnoredProperties ?? new Expression<Func<TSource, object>>[0];
-            TargetIgnoredProperties = targetIgnoredProperties ?? new Expression<Func<TDestination, object>>[0];
+            SourceIgnoredProperties = sourceIgnoredProperties ?? new IgnoreList<TSource>();
+            TargetIgnoredProperties = targetIgnoredProperties ?? new IgnoreList<TDestination>();
         }
 
-        public Expression<Func<TSource, object>>[] SourceIgnoredProperties { get; private set; }
-        public Expression<Func<TDestination, object>>[] TargetIgnoredProperties { get; private set; }
+        public IgnoreList<TSource> SourceIgnoredProperties { get; private set; }
+        public IgnoreList<TDestination> TargetIgnoredProperties { get; private set; }
         public Expression<Func<TSource, TDestination>> DefaultMappings { get; private set; }
         public Expression<Func<TSource, TDestination>> CustomMappings { get; private set; }
 
