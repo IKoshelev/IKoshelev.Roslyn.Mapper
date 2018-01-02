@@ -15,21 +15,18 @@ namespace IKoshelev.Roslyn.Mapper.Test
 @"
 namespace ConsoleApplication1
 {
-    public class Foo
+    public class Src
     {
         public int A { get; set; }
-        public int B { get; set; }
-        public int C { get; set; }
-        public int[] D { get; set; }
-        public Bar E { get; set; }
+        public int B { get; set; }       
         public int Ignore1 {get;set;}
     }
 
-    public class Bar
+    public class Trg
     {
-        public Bar() { }
+        public Trg() { }
 
-        public Bar(int a)
+        public Trg(int a)
         {
             A = a;
         }
@@ -37,7 +34,6 @@ namespace ConsoleApplication1
         public int A { get; set; }
         public int B { get; set; }
         public int C { get; set; }
-        public Bar E { get; set; }
         public int Ignore2 {get;set;}
     }
 }";
@@ -69,22 +65,22 @@ namespace ConsoleApplication1
         {
             public void Test()
             {
-                var test = new ExpressionMapper<Foo, Bar>(
-                    new ExpressionMappingComponents<Foo, Bar>(
-                        (source) => new Bar()
+                var test = new ExpressionMapper<Src, Trg>(
+                    new ExpressionMappingComponents<Src, Trg>(
+                        (source) => new Trg()
                         {
                             A = source.A,
                             B = source.B,
                         },
-                        customMappings: (source) => new Bar()
+                        customMappings: (source) => new Trg()
                         {
                             C = 15
                         },
-                        sourceIgnoredProperties: new Expression<Func<Foo, object>>[]
+                        sourceIgnoredProperties: new Expression<Func<Src, object>>[]
                         {
                             x => x.Ignore1
                         },
-                        targetIgnoredProperties: new Expression<Func<Foo, object>>[]
+                        targetIgnoredProperties: new Expression<Func<Src, object>>[]
                         {
                             x => x.Ignore2
                         }));
@@ -113,9 +109,9 @@ namespace ConsoleApplication1
         {
             public void Test()
             {
-                var test = new ExpressionMapper<Foo, Bar>(
-                    new ExpressionMappingComponents<Foo, Bar>(
-                        (source) => new Bar()
+                var test = new ExpressionMapper<Src, Trg>(
+                    new ExpressionMappingComponents<Src, Trg>(
+                        (source) => new Trg()
                         {
                             A = source.A,
                             B = source.B,
@@ -145,9 +141,9 @@ namespace ConsoleApplication1
         {
             public void Test()
             {
-                var bad =  new Expression<Func<Foo, object>>[0];
+                var bad =  new Expression<Func<Src, object>>[0];
 
-                var test = new ExpressionMapper<Foo, Bar>(
+                var test = new ExpressionMapper<Src, Trg>(
                     new ExpressionMappingComponents<Bad1, Bad2>(
                         null,
                         customMappings: null,

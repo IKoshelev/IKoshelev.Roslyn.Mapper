@@ -17,9 +17,7 @@ namespace IKoshelev.Roslyn.Mapper
     {
         public const string DiagnosticId = "IKoshelevRoslynMapper";
 
-        // You can change these strings in the Resources.resx file. If you do not want your analyzer to be localize-able, you can use regular strings for Title and MessageFormat.
-        // See https://github.com/dotnet/roslyn/blob/master/docs/analyzers/Localizing%20Analyzers.md for more on localization
-        public static readonly string MappingDefinitionStructuralIntegrityRuleTitle = "Rolsyn.Mapper mapping has a problem. T";
+        public static readonly string MappingDefinitionStructuralIntegrityRuleTitle = "Rolsyn.Mapper mapping has structural a problem.";
         public static readonly string MappingDefinitionStructuralIntegrityRuleMessageFormat = "Roslyn mapping has a structural problem. {0}";
         public static readonly string MappingDefinitionStructuralIntegrityRuleDescription = @"Roslyn mapper definitions must follow strict structure.
 Arguments can be passed by ordinal, by name or skipped. 
@@ -32,7 +30,7 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                         },
                         customMappings: (source) => new Bar()   // optional
                         {
-                            C = 15
+                            B = 15
                         },
                         sourceIgnoredProperties: new Expression<Func<Foo, object>>[]    // optional
                         {
@@ -45,9 +43,30 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
 ";
         private const string Category = "Roslyn.Mapper";
 
-        private static DiagnosticDescriptor MapperDefinitionStructuralIntegrityRule = new DiagnosticDescriptor(DiagnosticId, MappingDefinitionStructuralIntegrityRuleTitle, MappingDefinitionStructuralIntegrityRuleMessageFormat, Category, DiagnosticSeverity.Error, isEnabledByDefault: true, description: MappingDefinitionStructuralIntegrityRuleDescription);
+        private static DiagnosticDescriptor MapperDefinitionStructuralIntegrityRule = new DiagnosticDescriptor(
+                                                                                                        DiagnosticId, 
+                                                                                                        MappingDefinitionStructuralIntegrityRuleTitle, 
+                                                                                                        MappingDefinitionStructuralIntegrityRuleMessageFormat, 
+                                                                                                        Category, 
+                                                                                                        DiagnosticSeverity.Error, 
+                                                                                                        isEnabledByDefault: true, 
+                                                                                                        description: MappingDefinitionStructuralIntegrityRuleDescription);
 
-        public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get { return ImmutableArray.Create(MapperDefinitionStructuralIntegrityRule); } }
+        public static readonly string MappingDefinitionMissingMembergRuleTitle = "Rolsyn.Mapper mapping does not cover all members.";
+        public static readonly string MappingDefinitionMissingMembergRuleMessageFormat = "Rolsyn.Mapper mapping does not cover all members. {0}";
+        public static readonly string MappingDefinitionMissingMembergRuleDescription = "Rolsyn.Mapper mappings must mention every property of both "
+                                                                                    + "source type and target type in at least one of: defaultMappings, customMappings or ignore lists.";
+
+        private static DiagnosticDescriptor MapperDefinitionMissingMemberRule = new DiagnosticDescriptor(
+                                                                                                DiagnosticId,
+                                                                                                MappingDefinitionMissingMembergRuleTitle,
+                                                                                                MappingDefinitionMissingMembergRuleMessageFormat, 
+                                                                                                Category, DiagnosticSeverity.Error, 
+                                                                                                isEnabledByDefault: true, 
+                                                                                                description: MappingDefinitionMissingMembergRuleDescription);
+
+
+        public override ImmutableArray<DiagnosticDescriptor> SupportedDiagnostics { get { return ImmutableArray.Create(MapperDefinitionStructuralIntegrityRule, MapperDefinitionMissingMemberRule); } }
 
         public override void Initialize(AnalysisContext context)
         {
@@ -74,30 +93,83 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                 return;
             }
 
-            ExpressionMappingComponent[] expressionMappings = 
+            ExpressionMappingComponent[] mappings = 
                                                     relevantObjectCreations
                                                         .Select(creationSyntax =>
                                                                     ProcessCreationSyntaxIntoParts(creationSyntax, semanticModel))
                                                         .ToArray();
 
-            DiagnoseMissingRequiredComponentParts(expressionMappings);
+            DiagnoseMissingRequiredComponentParts(mappings);
 
-            var anyDiagnosticsEncountered = NotifyDiagnostics(context, expressionMappings);
+            var anyDiagnosticsEncountered = NotifyDiagnostics(context, mappings);
             if (anyDiagnosticsEncountered)
             {
                 return;
             }
 
-            foreach(var expr in expressionMappings)
+            foreach(var expr in mappings)
             {
                 ParseSymbolsFromMappingsAndIgnores(expr);
             }
 
-            anyDiagnosticsEncountered = NotifyDiagnostics(context, expressionMappings);
+            anyDiagnosticsEncountered = NotifyDiagnostics(context, mappings);
             if (anyDiagnosticsEncountered)
             {
                 return;
             }
+
+            foreach (var expr in mappings)
+            {
+                CheckAndNotifyMissingMembers(context, expr);
+            }       
+        }
+
+        private static void CheckAndNotifyMissingMembers(SymbolAnalysisContext context, ExpressionMappingComponent expr)
+        {
+            CheckAndNotifyMissingMembers(
+                                        expr.SourceTypeSymbol,
+                                        expr.SymbolsMappedInSource,
+                                        expr.SymbolsIgnoredInSource,
+                                        missing =>
+                                        {
+                                            var diag = Diagnostic.Create(
+                                                                    MapperDefinitionMissingMemberRule,
+                                                                    expr.CreationExpressionSyntax.GetLocation(), 
+                                                                    $"Source property {missing.Name} is not mapped.");
+                                            context.ReportDiagnostic(diag);
+                                        });
+
+            CheckAndNotifyMissingMembers(
+                            expr.TargetTypeSymbol,
+                            expr.SymbolsMappedInTarget,
+                            expr.SymbolsIgnoredInTarget,
+                            missing =>
+                            {
+                                var diag = Diagnostic.Create(
+                                                        MapperDefinitionMissingMemberRule,
+                                                        expr.CreationExpressionSyntax.GetLocation(),
+                                                        $"Target property {missing.Name} is not mapped.");
+                                context.ReportDiagnostic(diag);
+                            });
+        }
+
+        private static void CheckAndNotifyMissingMembers(INamedTypeSymbol type, ISymbol[] mapped, ISymbol[] ignored, Action<ISymbol> notifyFoSingle)
+        {
+            var allPublicFieldsAndProps = type
+                                            .GetMembers()
+                                            .Where(symbol => symbol.DeclaredAccessibility == Accessibility.Public
+                                                            && IsFieldOrFullProp(symbol))
+                                            .ToArray();
+
+            var missing = allPublicFieldsAndProps
+                                .Where(symbol => mapped.Contains(symbol) == false
+                                                && ignored.Contains(symbol) == false)
+                                .ToArray();
+
+            foreach(var symbol in missing)
+            {
+                notifyFoSingle(symbol);        
+            }            
         }
 
         private static void ParseSymbolsFromMappingsAndIgnores(ExpressionMappingComponent expr)
@@ -112,14 +184,25 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                                                   expr.IgnoreInTarget,
                                                   expr.Diagnostics);
 
-            var touchedProps = ParseTouchedPropsFromMapping(
+            var touchedPropsInDefault = ParseTouchedPropsFromMapping(
                                                     expr.SourceTypeSymbol,
                                                     expr.TargetTypeSymbol,
                                                     expr.DefaultMappings,
                                                     expr.Diagnostics);
 
-            expr.SymbolsMappedInSource = touchedProps.sourceProps;
-            expr.SymbolsMappedInTarget = touchedProps.targetProps;
+            var touchedPropsInCustom = ParseTouchedPropsFromMapping(
+                                                    expr.SourceTypeSymbol,
+                                                    expr.TargetTypeSymbol,
+                                                    expr.CustomMappings,
+                                                    expr.Diagnostics);
+
+            expr.SymbolsMappedInSource = touchedPropsInDefault.sourceProps
+                                            .Union(touchedPropsInCustom.sourceProps)
+                                            .ToArray();
+
+            expr.SymbolsMappedInTarget = touchedPropsInDefault.targetProps
+                                            .Union(touchedPropsInCustom.targetProps)
+                                            .ToArray();
         }
 
         private static bool NotifyDiagnostics(SymbolAnalysisContext context, ExpressionMappingComponent[] components)
@@ -289,14 +372,32 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
             return unboundGenericTypeFullName == symbolFullName;
         }
 
+        public static bool IsFieldOrFullProp(ISymbol symbol)
+        {
+           if(symbol is IFieldSymbol)
+            {
+                return true;
+            }
+
+            var propSymbol = symbol as IPropertySymbol;
+            if(propSymbol == null)
+            {
+                return false;
+            }
+
+            var hasGet = propSymbol.GetMethod != null;
+            var hasSet = propSymbol.SetMethod != null;
+
+            return hasGet && hasSet;
+        }
+
         public static ISymbol[] GetPublicFieldsAndProperties(INamedTypeSymbol symbol)
         {
             var members = symbol
                             .GetMembers()
                             .Where(subSymbol =>
                                     subSymbol.DeclaredAccessibility == Accessibility.Public
-                                    && (subSymbol is IPropertySymbol 
-                                        || subSymbol is IFieldSymbol))
+                                    && IsFieldOrFullProp(subSymbol))
                             .ToArray();
 
             return members;
@@ -350,7 +451,10 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
 
         public static 
             (ISymbol[] sourceProps, ISymbol[] targetProps) 
-                ParseTouchedPropsFromMapping(INamedTypeSymbol sourceType, INamedTypeSymbol targetType, ParenthesizedLambdaExpressionSyntax lambda, List<Diagnostic> diagnostics)
+                ParseTouchedPropsFromMapping(INamedTypeSymbol sourceType, 
+                                             INamedTypeSymbol targetType, 
+                                             ParenthesizedLambdaExpressionSyntax lambda, 
+                                             List<Diagnostic> diagnostics)
         {
             try
             {
@@ -368,7 +472,7 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                 var touchedTargetProps = assignments
                                                 .Select(x => x.ChildNodes().OfType<IdentifierNameSyntax>().First())
                                                 .Select(x => x.GetText().ToString().Trim())
-                                                .Select(name => sourceType.GetMembers(name).Single())
+                                                .Select(name => targetType.GetMembers(name).Single())
                                                 .ToArray();
 
                 var touchedSourceProps = lambda
@@ -376,7 +480,7 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                                             .Where(node => node.Expression.Fits(SyntaxKind.IdentifierName)
                                                             && node.Expression.ToString().Trim() == sourceIdentifierName)
                                             .Select(x => x.Name.GetText().ToString().Trim())
-                                            .Select(name => targetType.GetMembers(name).Single())
+                                            .Select(name => sourceType.GetMembers(name).Single())
                                             .ToArray();
 
                 return (touchedSourceProps, touchedTargetProps);
@@ -433,8 +537,7 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                 diagnostics.Add(diag);
             }
 
-            if(memberSymbol is IPropertySymbol
-               || memberSymbol is IFieldSymbol)
+            if(IsFieldOrFullProp(memberSymbol))
             {
                 return memberSymbol;
             }
