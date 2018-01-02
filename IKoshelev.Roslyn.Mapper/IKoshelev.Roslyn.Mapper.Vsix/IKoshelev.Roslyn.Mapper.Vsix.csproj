@@ -73,6 +73,12 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\IKoshelev.Mapper\IKoshelev.Mapper.csproj">
+      <Project>{9DC9192E-111D-423A-9600-C5267608216A}</Project>
+      <Name>IKoshelev.Mapper</Name>
+      <IncludeOutputGroupsInVSIX>BuiltProjectOutputGroup%3bBuiltProjectOutputGroupDependencies%3bGetCopyToOutputDirectoryItems%3bSatelliteDllsProjectOutputGroup%3b</IncludeOutputGroupsInVSIX>
+      <IncludeOutputGroupsInVSIXLocalOnly>DebugSymbolsProjectOutputGroup%3b</IncludeOutputGroupsInVSIXLocalOnly>
+    </ProjectReference>
     <ProjectReference Include="..\IKoshelev.Roslyn.Mapper\IKoshelev.Roslyn.Mapper.csproj">
       <Project>{A163D2FF-CAE6-41D4-A2A8-C1B187AEE0AF}</Project>
       <Name>IKoshelev.Roslyn.Mapper</Name>

@@ -77,51 +77,58 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
 
         private static void AnalyzeSymbol(SymbolAnalysisContext context)
         {
-            var syntaxReference = context.Symbol.DeclaringSyntaxReferences.Single();
+            try
+            {
+                var syntaxReference = context.Symbol.DeclaringSyntaxReferences.Single();
 
-            var expressionMappingComponentsConstructor = syntaxReference
-                                                            .GetSyntax()
-                                                            .DescendantNodes()
-                                                            .OfType<ObjectCreationExpressionSyntax>()
+                var expressionMappingComponentsConstructor = syntaxReference
+                                                                .GetSyntax()
+                                                                .DescendantNodes()
+                                                                .OfType<ObjectCreationExpressionSyntax>()
+                                                                .ToArray();
+
+                var semanticModel = context.Compilation.GetSemanticModel(syntaxReference.SyntaxTree, false);
+                ObjectCreationExpressionSyntax[] relevantObjectCreations = GetRelevantObjectCreations(context, expressionMappingComponentsConstructor, semanticModel);
+
+                if (relevantObjectCreations.Any() == false)
+                {
+                    return;
+                }
+
+                ExpressionMappingComponent[] mappings =
+                                                        relevantObjectCreations
+                                                            .Select(creationSyntax =>
+                                                                        ProcessCreationSyntaxIntoParts(creationSyntax, semanticModel))
                                                             .ToArray();
 
-            var semanticModel = context.Compilation.GetSemanticModel(syntaxReference.SyntaxTree, false);
-            ObjectCreationExpressionSyntax[] relevantObjectCreations = GetRelevantObjectCreations(context, expressionMappingComponentsConstructor, semanticModel);
+                DiagnoseMissingRequiredComponentParts(mappings);
 
-            if (relevantObjectCreations.Any() == false)
-            {
-                return;
+                var anyDiagnosticsEncountered = NotifyDiagnostics(context, mappings);
+                if (anyDiagnosticsEncountered)
+                {
+                    return;
+                }
+
+                foreach (var expr in mappings)
+                {
+                    ParseSymbolsFromMappingsAndIgnores(expr);
+                }
+
+                anyDiagnosticsEncountered = NotifyDiagnostics(context, mappings);
+                if (anyDiagnosticsEncountered)
+                {
+                    return;
+                }
+
+                foreach (var expr in mappings)
+                {
+                    CheckAndNotifyMissingMembers(context, expr);
+                }
             }
-
-            ExpressionMappingComponent[] mappings = 
-                                                    relevantObjectCreations
-                                                        .Select(creationSyntax =>
-                                                                    ProcessCreationSyntaxIntoParts(creationSyntax, semanticModel))
-                                                        .ToArray();
-
-            DiagnoseMissingRequiredComponentParts(mappings);
-
-            var anyDiagnosticsEncountered = NotifyDiagnostics(context, mappings);
-            if (anyDiagnosticsEncountered)
+            catch(Exception ex)
             {
-                return;
+
             }
-
-            foreach(var expr in mappings)
-            {
-                ParseSymbolsFromMappingsAndIgnores(expr);
-            }
-
-            anyDiagnosticsEncountered = NotifyDiagnostics(context, mappings);
-            if (anyDiagnosticsEncountered)
-            {
-                return;
-            }
-
-            foreach (var expr in mappings)
-            {
-                CheckAndNotifyMissingMembers(context, expr);
-            }       
         }
 
         private static void CheckAndNotifyMissingMembers(SymbolAnalysisContext context, ExpressionMappingComponent expr)
@@ -135,7 +142,7 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                                             var diag = Diagnostic.Create(
                                                                     MapperDefinitionMissingMemberRule,
                                                                     expr.CreationExpressionSyntax.GetLocation(), 
-                                                                    $"Source property {missing.Name} is not mapped.");
+                                                                    $"Source member {missing.Name} is not mapped.");
                                             context.ReportDiagnostic(diag);
                                         });
 
@@ -148,7 +155,7 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                                 var diag = Diagnostic.Create(
                                                         MapperDefinitionMissingMemberRule,
                                                         expr.CreationExpressionSyntax.GetLocation(),
-                                                        $"Target property {missing.Name} is not mapped.");
+                                                        $"Target member {missing.Name} is not mapped.");
                                 context.ReportDiagnostic(diag);
                             });
         }
@@ -408,9 +415,9 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
             try
             {
                 var lambdas = arraySyntax
-                     .Initializer
-                     .ChildNodes()
-                     .ToArray();
+                                     ?.Initializer
+                                     .ChildNodes()
+                                     .ToArray() ?? new SyntaxNode[0];
 
                 var impropperLambdas = lambdas
                                             .Where(x => x.Fits(SyntaxKind.SimpleLambdaExpression) == false)

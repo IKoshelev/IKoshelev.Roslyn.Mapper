@@ -1,22 +1,23 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
-  <Metadata>
-    <Identity Id="IKoshelev.Roslyn.Mapper..6a4a1666-401c-4b83-83d7-57a14f7f7d2b" Version="1.0" Language="en-US" Publisher="Me"/>
-    <DisplayName>IKoshelev.Roslyn.Mapper</DisplayName>
-    <Description xml:space="preserve">This is a sample diagnostic extension for the .NET Compiler Platform ("Roslyn").</Description>
-  </Metadata>
-  <Installation>
-    <InstallationTarget Version="[14.0,]" Id="Microsoft.VisualStudio.Pro" />
-  </Installation>
-  <Dependencies>
-    <Dependency Id="Microsoft.Framework.NDP" DisplayName="Microsoft .NET Framework" d:Source="Manual" Version="[4.5,)" />
-  </Dependencies>
-  <Assets>
-    <Asset Type="Microsoft.VisualStudio.MefComponent" d:Source="Project" d:ProjectName="IKoshelev.Roslyn.Mapper" Path="|IKoshelev.Roslyn.Mapper|"/>
-    <Asset Type="Microsoft.VisualStudio.Analyzer" d:Source="Project" d:ProjectName="IKoshelev.Roslyn.Mapper" Path="|IKoshelev.Roslyn.Mapper|"/>
-  </Assets>
-  <Prerequisites>
-    <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" Version="[15.0,16.0)" DisplayName="Visual Studio core editor" />
-    <Prerequisite Id="Microsoft.VisualStudio.Component.Roslyn.LanguageServices" Version="[15.0,16.0)" DisplayName="Roslyn Language Services" />
-  </Prerequisites>
+    <Metadata>
+        <Identity Id="IKoshelev.Roslyn.Mapper..6a4a1666-401c-4b83-83d7-57a14f7f7d2b" Version="1.0" Language="en-US" Publisher="Me"/>
+        <DisplayName>IKoshelev.Roslyn.Mapper</DisplayName>
+        <Description xml:space="preserve">This is a sample diagnostic extension for the .NET Compiler Platform ("Roslyn").</Description>
+    </Metadata>
+    <Installation>
+        <InstallationTarget Version="[14.0,]" Id="Microsoft.VisualStudio.Pro" />
+    </Installation>
+    <Dependencies>
+        <Dependency Id="Microsoft.Framework.NDP" DisplayName="Microsoft .NET Framework" d:Source="Manual" Version="[4.5,)" />
+    </Dependencies>
+    <Assets>
+        <Asset Type="Microsoft.VisualStudio.MefComponent" d:Source="Project" d:ProjectName="IKoshelev.Roslyn.Mapper" Path="|IKoshelev.Roslyn.Mapper|"/>
+        <Asset Type="Microsoft.VisualStudio.Analyzer" d:Source="Project" d:ProjectName="IKoshelev.Roslyn.Mapper" Path="|IKoshelev.Roslyn.Mapper|"/>
+        <Asset Type="Microsoft.VisualStudio.Assembly" d:Source="Project" d:ProjectName="IKoshelev.Mapper" Path="|IKoshelev.Mapper|" AssemblyName="|IKoshelev.Mapper;AssemblyName|" />
+    </Assets>
+    <Prerequisites>
+        <Prerequisite Id="Microsoft.VisualStudio.Component.CoreEditor" Version="[15.0,16.0)" DisplayName="Visual Studio core editor" />
+        <Prerequisite Id="Microsoft.VisualStudio.Component.Roslyn.LanguageServices" Version="[15.0,16.0)" DisplayName="Roslyn Language Services" />
+    </Prerequisites>
 </PackageManifest>
