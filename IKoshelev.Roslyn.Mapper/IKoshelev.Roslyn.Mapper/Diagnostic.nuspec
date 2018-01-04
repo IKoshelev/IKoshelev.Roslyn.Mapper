@@ -2,26 +2,25 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
   <metadata>
     <id>IKoshelev.Roslyn.Mapper</id>
-    <version>1.0.0.0</version>
+    <version>0.1.0.0</version>
     <title>IKoshelev.Roslyn.Mapper</title>
-    <authors>Me</authors>
-    <owners>Me</owners>
-    <licenseUrl>http://LICENSE_URL_HERE_OR_DELETE_THIS_LINE</licenseUrl>
-    <projectUrl>http://PROJECT_URL_HERE_OR_DELETE_THIS_LINE</projectUrl>
-    <iconUrl>http://ICON_URL_HERE_OR_DELETE_THIS_LINE</iconUrl>
+    <authors>IKoshelev</authors>
+    <owners>IKoshelev</owners>
+    <licenseUrl>https://opensource.org/licenses/MIT</licenseUrl>
+    <projectUrl>https://github.com/IKoshelev/IKoshelev.Roslyn.Mapper</projectUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
-    <description>IKoshelev.Roslyn.Mapper</description>
-    <releaseNotes>Summary of changes made in this release of the package.</releaseNotes>
+    <description>This is the diagnostics anlayzer part of IKoshelev.Mapper, lib which allows you to create Expression based mappings that are verified at design-time by Roslyn</description>
+    <releaseNotes>Alpha testing release</releaseNotes>
     <copyright>Copyright</copyright>
-    <tags>IKoshelev.Roslyn.Mapper, analyzers</tags>
+    <tags>Roslyn automatic mapper autmapping</tags>
     <frameworkAssemblies>
       <frameworkAssembly assemblyName="System" targetFramework="" />
     </frameworkAssemblies>
-    <developmentDependency>true</developmentDependency>
+    <developmentDependency>false</developmentDependency>
   </metadata>
-  <!-- The convention for analyzers is to put language agnostic dlls in analyzers\portable50 and language specific analyzers in either analyzers\portable50\cs or analyzers\portable50\vb -->
   <files>
     <file src="*.dll" target="analyzers\dotnet\cs" exclude="**\Microsoft.CodeAnalysis.*;**\System.Collections.Immutable.*;**\System.Reflection.Metadata.*;**\System.Composition.*" />
     <file src="tools\*.ps1" target="tools\" />
+    <file src="IKoshelev.Mapper.dll" target="lib\net40\"/>
   </files>
 </package>
