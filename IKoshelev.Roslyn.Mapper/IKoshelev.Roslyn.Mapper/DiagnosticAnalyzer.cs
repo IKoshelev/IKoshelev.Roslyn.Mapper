@@ -16,6 +16,7 @@ namespace IKoshelev.Roslyn.Mapper
     public class IKoshelevRoslynMapperAnalyzer : DiagnosticAnalyzer
     {
         public const string DiagnosticId = "IKoshelevRoslynMapper";
+        public const string AutomappableMembersDictKey = "automappableMembers";
 
         public static readonly string MappingDefinitionStructuralIntegrityRuleTitle = "Rolsyn.Mapper mapping has structural a problem.";
         public static readonly string MappingDefinitionStructuralIntegrityRuleMessageFormat = "Roslyn mapping has a structural problem. {0}";
@@ -32,10 +33,10 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                         {
                             B = 15
                         },
-                        sourceIgnoredProperties:  new IgnoreList<Src>(
+                        sourceIgnoredProperties:  new IgnoreList<Src>(  // optional
                             x => x.Ignore1
                         ),
-                        targetIgnoredProperties: new IgnoreList<Trg>(
+                        targetIgnoredProperties: new IgnoreList<Trg>(   // optional
                             x => x.Ignore2
                         )));
 ";
@@ -68,69 +69,79 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
 
         public override void Initialize(AnalysisContext context)
         {
-            // TODO: Consider registering other actions that act on syntax instead of or in addition to symbols
-            // See https://github.com/dotnet/roslyn/blob/master/docs/analyzers/Analyzer%20Actions%20Semantics.md for more information
             context.RegisterSymbolAction(AnalyzeSymbol, SymbolKind.NamedType);
         }
 
         private static void AnalyzeSymbol(SymbolAnalysisContext context)
         {
-            try
+            var syntaxReference = context.Symbol.DeclaringSyntaxReferences.Single();
+
+            var expressionMappingComponentsConstructor = syntaxReference
+                                                                    .GetSyntax()
+                                                                    .DescendantNodes()
+                                                                    .OfType<ObjectCreationExpressionSyntax>()
+                                                                    .ToArray();
+
+            var semanticModel = context.Compilation.GetSemanticModel(syntaxReference.SyntaxTree, false);
+            ObjectCreationExpressionSyntax[] relevantObjectCreations = GetRelevantObjectCreations(context, expressionMappingComponentsConstructor, semanticModel);
+
+            if (relevantObjectCreations.Any() == false)
             {
-                var syntaxReference = context.Symbol.DeclaringSyntaxReferences.Single();
-
-                var expressionMappingComponentsConstructor = syntaxReference
-                                                                .GetSyntax()
-                                                                .DescendantNodes()
-                                                                .OfType<ObjectCreationExpressionSyntax>()
-                                                                .ToArray();
-
-                var semanticModel = context.Compilation.GetSemanticModel(syntaxReference.SyntaxTree, false);
-                ObjectCreationExpressionSyntax[] relevantObjectCreations = GetRelevantObjectCreations(context, expressionMappingComponentsConstructor, semanticModel);
-
-                if (relevantObjectCreations.Any() == false)
-                {
-                    return;
-                }
-
-                ExpressionMappingComponent[] mappings =
-                                                        relevantObjectCreations
-                                                            .Select(creationSyntax =>
-                                                                        ProcessCreationSyntaxIntoParts(creationSyntax, semanticModel))
-                                                            .ToArray();
-
-                DiagnoseMissingRequiredComponentParts(mappings);
-
-                var anyDiagnosticsEncountered = NotifyDiagnostics(context, mappings);
-                if (anyDiagnosticsEncountered)
-                {
-                    return;
-                }
-
-                foreach (var expr in mappings)
-                {
-                    ParseSymbolsFromMappingsAndIgnores(expr);
-                }
-
-                anyDiagnosticsEncountered = NotifyDiagnostics(context, mappings);
-                if (anyDiagnosticsEncountered)
-                {
-                    return;
-                }
-
-                foreach (var expr in mappings)
-                {
-                    CheckAndNotifyMissingMembers(context, expr);
-                }
+                return;
             }
-            catch(Exception ex)
-            {
 
+            ExpressionMappingComponent[] mappings =
+                                                    relevantObjectCreations
+                                                        .Select(creationSyntax =>
+                                                                    ProcessCreationSyntaxIntoParts(creationSyntax, semanticModel))
+                                                        .ToArray();
+
+            DiagnoseMissingRequiredComponentParts(mappings);
+
+            var anyDiagnosticsEncountered = NotifyDiagnostics(context, mappings);
+            if (anyDiagnosticsEncountered)
+            {
+                return;
+            }
+
+            foreach (var expr in mappings)
+            {
+                ParseSymbolsFromMappingsAndIgnores(expr);
+            }
+
+            anyDiagnosticsEncountered = NotifyDiagnostics(context, mappings);
+            if (anyDiagnosticsEncountered)
+            {
+                return;
+            }
+
+            foreach (var expr in mappings)
+            {
+                CheckAndNotifyMissingMembers(context, expr);
             }
         }
 
         private static void CheckAndNotifyMissingMembers(SymbolAnalysisContext context, ExpressionMappingComponent expr)
         {
+            GetCompatibleMembers(   expr, 
+                                    out var automappableMembersImmutable, 
+                                    out var unmappedCompatibleMembers);
+
+            if (unmappedCompatibleMembers.Any())
+            {
+                var unmappedCompatibleMembersJoined = string.Join(";", unmappedCompatibleMembers);
+
+                var diag = Diagnostic.Create(
+                                            MapperDefinitionMissingMemberRule,
+                                            expr.DefaultMappings.GetLocation(),
+                                            automappableMembersImmutable,
+                                            $"Some membmers with identical names are not mapped. " +
+                                            $"Please choose '{IKoshelevRoslynMapperCodeFixProvider.Title}' or " +
+                                            $"manually handle missing members: {unmappedCompatibleMembersJoined}.");
+                context.ReportDiagnostic(diag);
+                return;
+            }
+
             CheckAndNotifyMissingMembers(
                                         expr.SourceTypeSymbol,
                                         expr.SymbolsMappedInSource,
@@ -139,7 +150,7 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                                         {
                                             var diag = Diagnostic.Create(
                                                                     MapperDefinitionMissingMemberRule,
-                                                                    expr.CreationExpressionSyntax.GetLocation(), 
+                                                                    expr.CreationExpressionSyntax.GetLocation(),
                                                                     $"Source member {missing.Name} is not mapped.");
                                             context.ReportDiagnostic(diag);
                                         });
@@ -156,6 +167,53 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                                                         $"Target member {missing.Name} is not mapped.");
                                 context.ReportDiagnostic(diag);
                             });
+        }
+
+        private static void GetCompatibleMembers(
+                                    ExpressionMappingComponent expr, 
+                                    out ImmutableDictionary<string, string> automappableMembersImmutable, 
+                                    out string[] unmappedCompatibleMembers)
+        {
+            var automappableMembers = GetSameNameFieldsAndProperties(expr.SourceTypeSymbol, expr.TargetTypeSymbol)
+                                                    .OrderBy(x => x)
+                                                    .ToArray();
+
+            var automappableMembersJoined = string.Join(";", automappableMembers);
+
+            automappableMembersImmutable = ImmutableDictionary.CreateRange(
+                new[]
+                {
+                    new KeyValuePair<string, string>(AutomappableMembersDictKey, automappableMembersJoined)
+                });
+
+            unmappedCompatibleMembers = automappableMembers
+                .Where(name =>
+                {
+                    return (expr.SymbolsMappedInSource.Any(x => x.Name == name) == false)
+                            && (expr.SymbolsIgnoredInSource.Any(x => x.Name == name) == false);
+                })
+                .ToArray();
+        }
+
+        private static string[] GetSameNameFieldsAndProperties(INamedTypeSymbol sourceTypeSymbol, INamedTypeSymbol targetTypeSymbol)
+        {
+            var sourceProps = sourceTypeSymbol
+                                                    .GetMembers()
+                                                    .Where(symbol => symbol.DeclaredAccessibility == Accessibility.Public
+                                                                    && IsFieldOrFullProp(symbol))
+                                                    .Select(x => x.Name);
+
+            var targetProps = targetTypeSymbol
+                                        .GetMembers()
+                                        .Where(symbol => symbol.DeclaredAccessibility == Accessibility.Public
+                                                        && IsFieldOrFullProp(symbol))
+                                        .Select(x => x.Name);
+
+            var shared = sourceProps
+                            .Intersect(targetProps)
+                            .ToArray();
+
+            return shared;
         }
 
         private static void CheckAndNotifyMissingMembers(INamedTypeSymbol type, ISymbol[] mapped, ISymbol[] ignored, Action<ISymbol> notifyFoSingle)

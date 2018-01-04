@@ -12,13 +12,15 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Rename;
 using Microsoft.CodeAnalysis.Text;
+using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
+using Microsoft.CodeAnalysis.Formatting;
 
 namespace IKoshelev.Roslyn.Mapper
 {
     [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(IKoshelevRoslynMapperCodeFixProvider)), Shared]
     public class IKoshelevRoslynMapperCodeFixProvider : CodeFixProvider
     {
-        private const string title = "Make uppercase";
+        public const string Title = "Regenerate defaultMappings.";
 
         public sealed override ImmutableArray<string> FixableDiagnosticIds
         {
@@ -27,47 +29,83 @@ namespace IKoshelev.Roslyn.Mapper
 
         public sealed override FixAllProvider GetFixAllProvider()
         {
-            // See https://github.com/dotnet/roslyn/blob/master/docs/analyzers/FixAllProvider.md for more information on Fix All Providers
             return WellKnownFixAllProviders.BatchFixer;
         }
 
         public sealed override async Task RegisterCodeFixesAsync(CodeFixContext context)
         {
-            var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
-
-            // TODO: Replace the following code with your own analysis, generating a CodeAction for each fix to suggest
             var diagnostic = context.Diagnostics.First();
             var diagnosticSpan = diagnostic.Location.SourceSpan;
 
-            // Find the type declaration identified by the diagnostic.
-            var declaration = root.FindToken(diagnosticSpan.Start).Parent.AncestorsAndSelf().OfType<TypeDeclarationSyntax>().First();
+            var automappableMembers = diagnostic.Properties?[IKoshelevRoslynMapperAnalyzer.AutomappableMembersDictKey];
 
-            // Register a code action that will invoke the fix.
+            if(automappableMembers == null)
+            {
+                return;
+            }
+
+            var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
+
+            var lambda = root.FindToken(diagnosticSpan.Start).Parent.AncestorsAndSelf().OfType<ParenthesizedLambdaExpressionSyntax>().First();
+
             context.RegisterCodeFix(
                 CodeAction.Create(
-                    title: title,
-                    createChangedSolution: c => MakeUppercaseAsync(context.Document, declaration, c),
-                    equivalenceKey: title),
+                    title: Title,
+                    createChangedDocument: c => RegenerateDefaultMappingsAsync(context.Document, lambda, automappableMembers, c),
+                    equivalenceKey: Title),
                 diagnostic);
         }
 
-        private async Task<Solution> MakeUppercaseAsync(Document document, TypeDeclarationSyntax typeDecl, CancellationToken cancellationToken)
+        private async Task<Document> RegenerateDefaultMappingsAsync(
+            Document document, 
+            ParenthesizedLambdaExpressionSyntax lambda,
+            string automappableMembers,
+            CancellationToken cancellationToken)
         {
-            // Compute new uppercase name.
-            var identifierToken = typeDecl.Identifier;
-            var newName = identifierToken.Text.ToUpperInvariant();
+            var parsedMappableMembers = automappableMembers.Split(';');
 
-            // Get the symbol representing the type to be renamed.
-            var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
-            var typeSymbol = semanticModel.GetDeclaredSymbol(typeDecl, cancellationToken);
+            var sourceIdentifierName = lambda
+                            .ChildNodes().OfType<ParameterListSyntax>().Single()
+                            .ChildNodes().OfType<ParameterSyntax>().Single()
+                            .ChildTokens().Single().ToString().Trim();
 
-            // Produce a new solution that has all references to that type renamed, including the declaration.
-            var originalSolution = document.Project.Solution;
-            var optionSet = originalSolution.Workspace.Options;
-            var newSolution = await Renamer.RenameSymbolAsync(document.Project.Solution, typeSymbol, newName, optionSet, cancellationToken).ConfigureAwait(false);
+            var preparedNames = parsedMappableMembers
+                                        .Select(x => $"{x}={sourceIdentifierName}.{x},\r\n")
+                                        .ToArray();
 
-            // Return the new solution with the now-uppercase type name.
-            return newSolution;
+            var preparedJoinedNames = string.Join("", preparedNames);
+
+            var newInitializerText =
+$@"new X{{
+{preparedJoinedNames}}}";
+
+                var newInitializer = ((ObjectCreationExpressionSyntax)SF.ParseExpression(newInitializerText))
+                                       .ChildNodes().OfType<InitializerExpressionSyntax>().Single();
+
+                var oldInitializer = lambda
+                                    .ChildNodes().OfType<ObjectCreationExpressionSyntax>().Single()
+                                    .ChildNodes().OfType<InitializerExpressionSyntax>().Single();
+
+                var newRawLambda = lambda.ReplaceNode(oldInitializer, newInitializer);
+
+                newRawLambda = newRawLambda.WithAdditionalAnnotations(Formatter.Annotation);
+
+                var workspace = document.Project.Solution.Workspace;
+
+                var newFormattedLambda = Formatter.Format(newRawLambda,
+                                                        Formatter.Annotation,
+                                                        workspace,
+                                                        workspace.Options,
+                                                        cancellationToken)
+                                                        as ParenthesizedLambdaExpressionSyntax;
+
+                var root = await document.GetSyntaxRootAsync(cancellationToken);
+
+                var newDocumentRoot = root.ReplaceNode(lambda, newFormattedLambda);
+
+                document = document.WithSyntaxRoot(newDocumentRoot);
+
+                return document;
         }
     }
 }
