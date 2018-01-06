@@ -118,7 +118,10 @@ namespace ConsoleApplication1
         }
     }" + ClassDefinitions;
 
-            VerifyCSharpDiagnostic(test);
+            VerifyCSharpDiagnostic(test,
+                MappingProblem("Source member Ignore1 is not mapped.", 17,21),
+                MappingProblem("Target member C is not mapped.", 17, 21),
+                MappingProblem("Target member Ignore2 is not mapped.", 17, 21));
         }
 
         [TestMethod]
@@ -151,7 +154,7 @@ namespace ConsoleApplication1
         }
     }" + ClassDefinitions;
 
-            DiagnosticResult Diagnostics(string message, int line, int column)
+            DiagnosticResult StructuralProblem(string message, int line, int column)
             {
                 return new DiagnosticResult
                 {
@@ -166,29 +169,108 @@ namespace ConsoleApplication1
             }
 
             VerifyCSharpDiagnostic(test, 
-                Diagnostics("\"defaultMappings\" not found.", 19,21),
-                Diagnostics("Source type could not be resolved.", 19, 21),
-                Diagnostics("Target type could not be resolved.", 19, 21),
-                Diagnostics("Argument for \"defaultMappings\" could not be processed.", 20, 25),
-                Diagnostics("Argument for \"customMappings\" could not be processed.", 21, 25),
-                Diagnostics("Argument for \"sourceIgnoredProperties\" could not be processed.", 22, 25),
-                Diagnostics("Argument for \"targetIgnoredProperties\" could not be processed.", 23, 25));
+                StructuralProblem("\"defaultMappings\" not found.", 19,21),
+                StructuralProblem("Source type could not be resolved.", 19, 21),
+                StructuralProblem("Target type could not be resolved.", 19, 21),
+                StructuralProblem("Argument for \"defaultMappings\" could not be processed.", 20, 25),
+                StructuralProblem("Argument for \"customMappings\" could not be processed.", 21, 25),
+                StructuralProblem("Argument for \"sourceIgnoredProperties\" could not be processed.", 22, 25),
+                StructuralProblem("Argument for \"targetIgnoredProperties\" could not be processed.", 23, 25));
+        }
 
-    //        var fixtest = @"
-    //using System;
-    //using System.Collections.Generic;
-    //using System.Linq;
-    //using System.Text;
-    //using System.Threading.Tasks;
-    //using System.Diagnostics;
+        [TestMethod]
+        public void WhenMissingMappingsFoundAFixWillBeProposedForCompatibleMembers()
+        {
+            var test = @"
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Text;
+    using System.Threading.Tasks;
+    using System.Diagnostics;
+    using IKoshelev.Mapper; 
 
-    //namespace ConsoleApplication1
-    //{
-    //    class TYPENAME
-    //    {   
-    //    }
-    //}";
-    //        VerifyCSharpFix(test, fixtest);
+    namespace ConsoleApplication1
+    {
+        class Test
+        {
+            public void Test()
+            {
+                var test = new ExpressionMapper<Src, Trg>(
+                    new ExpressionMappingComponents<Src, Trg>(
+                        (source) => new Trg()
+                        {
+                        },
+                        customMappings: (source) => new Trg()
+                        {
+                            C = 15
+                        },
+                        sourceIgnoredProperties: new IgnoreList<Src>(
+                            x => x.Ignore1
+                        ),
+                        targetIgnoredProperties: new IgnoreList<Trg>(
+                            x => x.Ignore2
+                        )));
+            }
+        }
+    }" + ClassDefinitions;
+
+            VerifyCSharpDiagnostic(test,
+                MappingProblem("Some membmers with identical names are not mapped. Please choose 'Regenerate defaultMappings.'"+ 
+                                " or manually handle missing members: A;B.", 18, 25));
+
+            var fixTest = @"
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Text;
+    using System.Threading.Tasks;
+    using System.Diagnostics;
+    using IKoshelev.Mapper; 
+
+    namespace ConsoleApplication1
+    {
+        class Test
+        {
+            public void Test()
+            {
+                var test = new ExpressionMapper<Src, Trg>(
+                    new ExpressionMappingComponents<Src, Trg>(
+(source) => new Trg()
+{
+    A = source.A,
+    B = source.B,
+},
+                        customMappings: (source) => new Trg()
+                        {
+                            C = 15
+                        },
+                        sourceIgnoredProperties: new IgnoreList<Src>(
+                            x => x.Ignore1
+                        ),
+                        targetIgnoredProperties: new IgnoreList<Trg>(
+                            x => x.Ignore2
+                        )));
+            }
+        }
+    }" + ClassDefinitions;
+
+            VerifyCSharpFix(test, fixTest);
+
+        }
+
+        DiagnosticResult MappingProblem(string message, int line, int column)
+        {
+            return new DiagnosticResult
+            {
+                Id = "IKoshelevRoslynMapper",
+                Message = String.Format(IKoshelevRoslynMapperAnalyzer.MappingDefinitionMissingMembergRuleMessageFormat, message),
+                Severity = DiagnosticSeverity.Error,
+                Locations =
+                new[] {
+                            new DiagnosticResultLocation("Test0.cs", line, column)
+                    }
+            };
         }
 
         protected override CodeFixProvider GetCSharpCodeFixProvider()

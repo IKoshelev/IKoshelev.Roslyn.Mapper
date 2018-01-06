@@ -520,6 +520,11 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                                              ParenthesizedLambdaExpressionSyntax lambda, 
                                              List<Diagnostic> diagnostics)
         {
+            if(lambda == null)
+            {
+                return (new ISymbol[0], new ISymbol[0]);
+            }
+
             try
             {
                 var sourceIdentifierName = lambda

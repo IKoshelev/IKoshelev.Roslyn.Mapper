@@ -2,14 +2,17 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2011/08/nuspec.xsd">
   <metadata>
     <id>IKoshelev.Roslyn.Mapper</id>
-    <version>0.1.0.0</version>
+    <version>0.2.0.0</version>
     <title>IKoshelev.Roslyn.Mapper</title>
     <authors>IKoshelev</authors>
     <owners>IKoshelev</owners>
     <licenseUrl>https://opensource.org/licenses/MIT</licenseUrl>
     <projectUrl>https://github.com/IKoshelev/IKoshelev.Roslyn.Mapper</projectUrl>
     <requireLicenseAcceptance>false</requireLicenseAcceptance>
-    <description>This is the diagnostics anlayzer part of IKoshelev.Mapper, lib which allows you to create Expression based mappings that are verified at design-time by Roslyn</description>
+    <description>
+      This library consists of IKoshelev.Mapper.ExpressionMappingComponents type, which is used to define expressions mapping type A to type B,
+      and IKoshelev.Roslyn.Mapper analyzer, which at design-time checks that no field or propperty of types A or B is missing from the mapping definition.
+    </description>
     <releaseNotes>Alpha testing release</releaseNotes>
     <copyright>Copyright</copyright>
     <tags>Roslyn automatic mapper autmapping</tags>

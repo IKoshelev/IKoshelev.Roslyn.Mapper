@@ -37,7 +37,8 @@ namespace IKoshelev.Roslyn.Mapper
             var diagnostic = context.Diagnostics.First();
             var diagnosticSpan = diagnostic.Location.SourceSpan;
 
-            var automappableMembers = diagnostic.Properties?[IKoshelevRoslynMapperAnalyzer.AutomappableMembersDictKey];
+            string automappableMembers = null;
+            diagnostic.Properties?.TryGetValue(IKoshelevRoslynMapperAnalyzer.AutomappableMembersDictKey, out automappableMembers);
 
             if(automappableMembers == null)
             {
