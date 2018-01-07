@@ -42,7 +42,7 @@ namespace IKoshelev.Mapper
 
                 if (customMappings == null)
                 {
-                    return customMappings;
+                    return defaultMappings;
                 }
 
                 var combiner = new ExpressionCombiner<TSource, TDestination>();
@@ -58,7 +58,7 @@ namespace IKoshelev.Mapper
             get
             {
                 var defaultMappings = DefaultMappings;
-                var customMappings = CustomMappings ?? ((source) => new TDestination());
+                var customMappings = CustomMappings ?? ((source) => new TDestination() { });
 
                 var combiner = new ExpressionCombiner<TSource, TDestination>();
 

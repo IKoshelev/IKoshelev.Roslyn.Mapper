@@ -80,5 +80,37 @@ namespace IKoshelev.Mapper.Test
             Assert.AreEqual(existing.C, 15);
             Assert.AreEqual(existing.E, null);
         }
+
+        [Test]
+        public void ExpressionMapper_WorksWithJustDefaultMappings()
+        {
+            var foo = new Foo()
+            {
+                A = 5,
+                B = 10
+            };
+
+            var mapper = new ExpressionMapper<Foo, Bar>(
+                new ExpressionMappingComponents<Foo, Bar>(
+                    defaultMappings: (Foo source) => new Bar()
+                    {
+                        A = source.A,
+                        B = source.B,
+                    }));
+
+            var @new = mapper.Map(foo);
+            Assert.AreEqual(@new.A, 5);
+            Assert.AreEqual(@new.B, 10);
+            Assert.AreEqual(@new.C, 0);
+            Assert.AreEqual(@new.E, null);
+
+            var existing = new Bar();
+
+            mapper.Map(foo, existing);
+            Assert.AreEqual(existing.A, 5);
+            Assert.AreEqual(existing.B, 10);
+            Assert.AreEqual(existing.C, 0);
+            Assert.AreEqual(existing.E, null);
+        }
     }
 }
