@@ -5,6 +5,7 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 using System;
 using TestHelper;
 using IKoshelev.Roslyn.Mapper;
+using System.Linq.Expressions;
 
 namespace IKoshelev.Roslyn.Mapper.Test
 {
@@ -154,20 +155,6 @@ namespace ConsoleApplication1
         }
     }" + ClassDefinitions;
 
-            DiagnosticResult StructuralProblem(string message, int line, int column)
-            {
-                return new DiagnosticResult
-                {
-                    Id = "IKoshelevRoslynMapper",
-                    Message = String.Format(IKoshelevRoslynMapperAnalyzer.MappingDefinitionStructuralIntegrityRuleMessageFormat, message),
-                    Severity = DiagnosticSeverity.Error,
-                    Locations =
-                    new[] {
-                            new DiagnosticResultLocation("Test0.cs", line, column)
-                        }
-                };
-            }
-
             VerifyCSharpDiagnostic(test,            
                 StructuralProblem("Source type could not be resolved.", 19, 21),
                 StructuralProblem("Target type could not be resolved.", 19, 21),
@@ -236,11 +223,11 @@ namespace ConsoleApplication1
             {
                 var test = new ExpressionMapper<Src, Trg>(
                     new ExpressionMappingComponents<Src, Trg>(
-(source) => new Trg()
-{
-    A = source.A,
-    B = source.B,
-},
+                        (source) => new Trg()
+                        {
+                            A = source.A,
+                            B = source.B,
+                        },
                         customMappings: (source) => new Trg()
                         {
                             C = 15
@@ -257,6 +244,71 @@ namespace ConsoleApplication1
 
             VerifyCSharpFix(test, fixTest);
 
+        }
+
+        [TestMethod]
+        public void WhenMappingWithoudDefaultFoundWillOfferToGenerateAllMappings()
+        {
+            var test = @"
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Text;
+    using System.Threading.Tasks;
+    using System.Diagnostics;
+    using IKoshelev.Mapper; 
+
+    namespace ConsoleApplication1
+    {
+        class Test
+        {
+            public void Test()
+            {
+                var test = new ExpressionMappingComponents<Src, Trg>();
+            }
+        }
+    }" + ClassDefinitions;
+
+            VerifyCSharpDiagnostic(test,
+                StructuralProblem("\"defaultMappings\" not found.", 16, 28));
+
+            var fixTest = @"
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Text;
+    using System.Threading.Tasks;
+    using System.Diagnostics;
+    using IKoshelev.Mapper; 
+
+    namespace ConsoleApplication1
+    {
+        class Test
+        {
+            public void Test()
+            {
+                var test =
+new ExpressionMappingComponents<Src, Trg>(
+    defaultMappings: (Src source) => new Trg()
+    {
+        A = source.A,
+        B = source.B
+    },
+    customMappings: (Src source) => new Trg()
+    {
+    },
+    sourceIgnoredProperties: new IgnoreList<Src>(
+        (Src source) => source.Ignore1
+),
+    targetIgnoredProperties: new IgnoreList<Trg>(
+        (Trg target) => target.C,
+(Trg target) => target.Ignore2
+));
+            }
+        }
+    }" + ClassDefinitions;
+
+            VerifyCSharpFix(test, fixTest, allowNewCompilerDiagnostics: true);
         }
 
         [TestMethod]
@@ -300,6 +352,20 @@ namespace ConsoleApplication1
 
             VerifyCSharpDiagnostic(test);
 
+        }
+
+        DiagnosticResult StructuralProblem(string message, int line, int column)
+        {
+            return new DiagnosticResult
+            {
+                Id = "IKoshelevRoslynMapper",
+                Message = String.Format(IKoshelevRoslynMapperAnalyzer.MappingDefinitionStructuralIntegrityRuleMessageFormat, message),
+                Severity = DiagnosticSeverity.Error,
+                Locations =
+                new[] {
+                            new DiagnosticResultLocation("Test0.cs", line, column)
+                    }
+            };
         }
 
         DiagnosticResult MappingProblem(string message, int line, int column)

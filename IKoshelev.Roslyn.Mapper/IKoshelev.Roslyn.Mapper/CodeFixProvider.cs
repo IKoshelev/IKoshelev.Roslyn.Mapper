@@ -139,23 +139,7 @@ new ExpressionMappingComponents<{sourceTypeName}, {targetTypeName}>(
 
             var newObjectCreationRaw = ((ObjectCreationExpressionSyntax)SF.ParseExpression(newObjectCreationText));
 
-            newObjectCreationRaw = newObjectCreationRaw.WithAdditionalAnnotations(Formatter.Annotation);
-
-            var workspace = document.Project.Solution.Workspace;
-
-            var newObjectCreationFormatted = Formatter.Format(
-                                                            newObjectCreationRaw,
-                                                            Formatter.Annotation,
-                                                            workspace,
-                                                            workspace.Options,
-                                                            cancellationToken)
-                                                            as ObjectCreationExpressionSyntax;
-
-            var root = await document.GetSyntaxRootAsync(cancellationToken);
-
-            var newDocumentRoot = root.ReplaceNode(objectCreation, newObjectCreationFormatted);
-
-            document = document.WithSyntaxRoot(newDocumentRoot);
+            document = await ParseSyntaxTextAndReplaceNode(document, objectCreation, newObjectCreationRaw, cancellationToken);
 
             return document;
 
@@ -174,6 +158,30 @@ new ExpressionMappingComponents<{sourceTypeName}, {targetTypeName}>(
 
                 return preparedJoinedNames;
             }
+        }
+
+        private static async Task<Document> ParseSyntaxTextAndReplaceNode<T>
+            (Document document, T oldNode, T newNode, CancellationToken cancellationToken)
+            where T: SyntaxNode
+        {
+            newNode = newNode.WithAdditionalAnnotations(Formatter.Annotation);
+
+            var workspace = document.Project.Solution.Workspace;
+
+            var newObjectCreationFormatted = Formatter.Format(
+                                                            newNode,
+                                                            Formatter.Annotation,
+                                                            workspace,
+                                                            workspace.Options,
+                                                            cancellationToken)
+                                                            as ObjectCreationExpressionSyntax;
+
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+
+            var newDocumentRoot = root.ReplaceNode(oldNode, newNode);
+
+            document = document.WithSyntaxRoot(newDocumentRoot);
+            return document;
         }
 
         private async Task<Document> RegenerateDefaultMappingsAsync(
@@ -199,33 +207,18 @@ new ExpressionMappingComponents<{sourceTypeName}, {targetTypeName}>(
 $@"new X{{
 {preparedJoinedNames}}}";
 
-                var newInitializer = ((ObjectCreationExpressionSyntax)SF.ParseExpression(newInitializerText))
-                                       .ChildNodes().OfType<InitializerExpressionSyntax>().Single();
-
-                var oldInitializer = lambda
-                                    .ChildNodes().OfType<ObjectCreationExpressionSyntax>().Single()
+            var newInitializer = ((ObjectCreationExpressionSyntax)SF.ParseExpression(newInitializerText))
                                     .ChildNodes().OfType<InitializerExpressionSyntax>().Single();
 
-                var newRawLambda = lambda.ReplaceNode(oldInitializer, newInitializer);
+            var oldInitializer = lambda
+                                .ChildNodes().OfType<ObjectCreationExpressionSyntax>().Single()
+                                .ChildNodes().OfType<InitializerExpressionSyntax>().Single();
 
-                newRawLambda = newRawLambda.WithAdditionalAnnotations(Formatter.Annotation);
+            var newRawLambda = lambda.ReplaceNode(oldInitializer, newInitializer);
 
-                var workspace = document.Project.Solution.Workspace;
+            document = await ParseSyntaxTextAndReplaceNode(document, lambda, newRawLambda, cancellationToken);
 
-                var newFormattedLambda = Formatter.Format(newRawLambda,
-                                                        Formatter.Annotation,
-                                                        workspace,
-                                                        workspace.Options,
-                                                        cancellationToken)
-                                                        as ParenthesizedLambdaExpressionSyntax;
-
-                var root = await document.GetSyntaxRootAsync(cancellationToken);
-
-                var newDocumentRoot = root.ReplaceNode(lambda, newFormattedLambda);
-
-                document = document.WithSyntaxRoot(newDocumentRoot);
-
-                return document;
+            return document;
         }
     }
 }
