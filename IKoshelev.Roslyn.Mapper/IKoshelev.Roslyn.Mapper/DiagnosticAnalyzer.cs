@@ -17,6 +17,10 @@ namespace IKoshelev.Roslyn.Mapper
     {
         public const string DiagnosticId = "IKoshelevRoslynMapper";
         public const string AutomappableMembersDictKey = "automappableMembers";
+        public const string NonAutomappableSourceMembersDictKey = "nonAutomappableSourceMembers";
+        public const string NonAutomappableTargetMembersDictKey = "nonAutomappableTargetMembers";
+        public const string SourceTypeNameDictKey = "sourceTypeNameDictKey";
+        public const string TargetTypeNameDictKey = "targetTypeNameDictKey";
 
         public static readonly string MappingDefinitionStructuralIntegrityRuleTitle = "Rolsyn.Mapper mapping has structural a problem.";
         public static readonly string MappingDefinitionStructuralIntegrityRuleMessageFormat = "Roslyn mapping has a structural problem. {0}";
@@ -123,9 +127,9 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
 
         private static void CheckAndNotifyMissingMembers(SymbolAnalysisContext context, ExpressionMappingComponent expr)
         {
-            GetCompatibleMembers(   expr, 
-                                    out var automappableMembersImmutable, 
-                                    out var unmappedCompatibleMembers);
+            GetMemberClassifications(   expr, 
+                                        out var membersClassificationDict, 
+                                        out var unmappedCompatibleMembers);
 
             if (unmappedCompatibleMembers.Any())
             {
@@ -134,9 +138,9 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                 var diag = Diagnostic.Create(
                                             MapperDefinitionMissingMemberRule,
                                             expr.DefaultMappings.GetLocation(),
-                                            automappableMembersImmutable,
+                                            membersClassificationDict,
                                             $"Some membmers with identical names are not mapped. " +
-                                            $"Please choose '{IKoshelevRoslynMapperCodeFixProvider.Title}' or " +
+                                            $"Please choose '{IKoshelevRoslynMapperCodeFixProvider.TitleRegenerateDefaultMappings}' or " +
                                             $"manually handle missing members: {unmappedCompatibleMembersJoined}.");
                 context.ReportDiagnostic(diag);
                 return;
@@ -169,24 +173,19 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                             });
         }
 
-        private static void GetCompatibleMembers(
-                                    ExpressionMappingComponent expr, 
-                                    out ImmutableDictionary<string, string> automappableMembersImmutable, 
+        private static void GetMemberClassifications(
+                                    ExpressionMappingComponent expr,
+                                    out ImmutableDictionary<string, string> membersClassificationDict,
                                     out string[] unmappedCompatibleMembers)
         {
-            var automappableMembers = GetSameNameFieldsAndProperties(expr.SourceTypeSymbol, expr.TargetTypeSymbol)
-                                                    .OrderBy(x => x)
-                                                    .ToArray();
+            var membersClasification = GetSameNameFieldsAndProperties(expr.SourceTypeSymbol, expr.TargetTypeSymbol);
 
-            var automappableMembersJoined = string.Join(";", automappableMembers);
+            membersClassificationDict = PrepareMemberClassificationDictForCodeFix(
+                                                                            membersClasification,
+                                                                            expr.SourceTypeSymbol,
+                                                                            expr.TargetTypeSymbol);
 
-            automappableMembersImmutable = ImmutableDictionary.CreateRange(
-                new[]
-                {
-                    new KeyValuePair<string, string>(AutomappableMembersDictKey, automappableMembersJoined)
-                });
-
-            unmappedCompatibleMembers = automappableMembers
+            unmappedCompatibleMembers = membersClasification.mappable
                 .Where(name =>
                 {
                     return (expr.SymbolsMappedInSource.Any(x => x.Name == name) == false)
@@ -195,13 +194,39 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                 .ToArray();
         }
 
-        private static string[] GetSameNameFieldsAndProperties(INamedTypeSymbol sourceTypeSymbol, INamedTypeSymbol targetTypeSymbol)
+        private static ImmutableDictionary<string, string> PrepareMemberClassificationDictForCodeFix(
+            (string[] mappable, string[] nonMappableSource, string[] nonMappableTarget) membersClasification,
+            INamedTypeSymbol sourceTypeSymbol, 
+            INamedTypeSymbol targetTypeSymbol)
+        {
+            var automappableMembersJoined = string.Join(";", membersClasification.mappable);
+
+            var nonMappableSourceJoined = string.Join(";", membersClasification.nonMappableSource);
+
+            var nonMappableTargetJoined = string.Join(";", membersClasification.nonMappableTarget);
+
+            ImmutableDictionary<string, string> membersClassifications = (new Dictionary<string, string>()
+                                        {
+                                            { SourceTypeNameDictKey, sourceTypeSymbol.Name },
+                                            { TargetTypeNameDictKey, targetTypeSymbol.Name },
+                                            { AutomappableMembersDictKey, automappableMembersJoined },
+                                            { NonAutomappableSourceMembersDictKey, nonMappableSourceJoined },
+                                            { NonAutomappableTargetMembersDictKey, nonMappableTargetJoined }
+                                        })
+                                        .ToImmutableDictionary();
+
+            return membersClassifications;
+        }
+
+        private static 
+            (string[] mappable, string[] nonMappableSource, string[] nonMappableTarget) 
+                GetSameNameFieldsAndProperties(INamedTypeSymbol sourceTypeSymbol, INamedTypeSymbol targetTypeSymbol)
         {
             var sourceProps = sourceTypeSymbol
-                                                    .GetMembers()
-                                                    .Where(symbol => symbol.DeclaredAccessibility == Accessibility.Public
-                                                                    && IsFieldOrFullProp(symbol))
-                                                    .Select(x => x.Name);
+                                        .GetMembers()
+                                        .Where(symbol => symbol.DeclaredAccessibility == Accessibility.Public
+                                                        && IsFieldOrFullProp(symbol))
+                                        .Select(x => x.Name);
 
             var targetProps = targetTypeSymbol
                                         .GetMembers()
@@ -209,11 +234,22 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                                                         && IsFieldOrFullProp(symbol))
                                         .Select(x => x.Name);
 
-            var shared = sourceProps
-                            .Intersect(targetProps)
-                            .ToArray();
+            var mappable = sourceProps
+                                .Intersect(targetProps)
+                                .OrderBy(x => x)
+                                .ToArray();
 
-            return shared;
+            var nonMappableSource = sourceProps
+                                            .Except(mappable)
+                                            .OrderBy(x => x)
+                                            .ToArray();
+
+            var nonMappableTarget = targetProps
+                                            .Except(mappable)
+                                            .OrderBy(x => x)
+                                            .ToArray();
+
+            return (mappable, nonMappableSource, nonMappableTarget);
         }
 
         private static void CheckAndNotifyMissingMembers(INamedTypeSymbol type, ISymbol[] mapped, ISymbol[] ignored, Action<ISymbol> notifyFoSingle)
@@ -291,23 +327,47 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
         {
             foreach(var component in components)
             {
-                if(component.DefaultMappings == null)
-                {
-                    var diag = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, component.CreationExpressionSyntax.GetLocation(), "\"defaultMappings\" not found.");
-                    component.Diagnostics.Add(diag);
-                }
-
                 if(component.SourceTypeSyntax == null || component.SourceTypeSymbol == null)
                 {
-                    var diag = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, component.CreationExpressionSyntax.GetLocation(), "Source type could not be resolved.");
-                    component.Diagnostics.Add(diag);
+                    var diag1 = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, component.CreationExpressionSyntax.GetLocation(), "Source type could not be resolved.");
+                    component.Diagnostics.Add(diag1);
                 }
 
                 if (component.TargetTypeSyntax == null || component.TargetTypeSymbol == null)
                 {
-                    var diag = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, component.CreationExpressionSyntax.GetLocation(), "Target type could not be resolved.");
-                    component.Diagnostics.Add(diag);
+                    var diag2 = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, component.CreationExpressionSyntax.GetLocation(), "Target type could not be resolved.");
+                    component.Diagnostics.Add(diag2);
                 }
+
+                if (component.DefaultMappings != null)
+                {
+                    continue;
+                }
+
+                Diagnostic diag3 = null;
+                if (component.SourceTypeSymbol != null && component.TargetTypeSymbol != null)
+                {
+                    var membersClasification = GetSameNameFieldsAndProperties(component.SourceTypeSymbol, component.TargetTypeSymbol);
+                    var membersClassificationDict = PrepareMemberClassificationDictForCodeFix(
+                                                                                membersClasification,
+                                                                                component.SourceTypeSymbol,
+                                                                                component.TargetTypeSymbol);
+
+                    diag3 = Diagnostic.Create(
+                                            MapperDefinitionStructuralIntegrityRule, 
+                                            component.CreationExpressionSyntax.GetLocation(), 
+                                            membersClassificationDict, 
+                                            "\"defaultMappings\" not found.");                  
+                }
+                else
+                {
+                    diag3 = Diagnostic.Create(
+                                            MapperDefinitionStructuralIntegrityRule, 
+                                            component.CreationExpressionSyntax.GetLocation(), 
+                                            "\"defaultMappings\" not found.");
+                }
+
+                component.Diagnostics.Add(diag3);
             }
         }
 
@@ -357,8 +417,8 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
 
         private static void FillInArguments(ExpressionMappingComponent component, SyntaxNode[] arguments)
         {
-            component.DefaultMappings = TryGetArgumentValueSyntax<ParenthesizedLambdaExpressionSyntax>(0, "defaultMappings", arguments, component.Diagnostics);
-            component.CustomMappings = TryGetArgumentValueSyntax<ParenthesizedLambdaExpressionSyntax>(1, "customMappings", arguments, component.Diagnostics);
+            component.DefaultMappings = TryGetArgumentValueSyntax<LambdaExpressionSyntax>(0, "defaultMappings", arguments, component.Diagnostics);
+            component.CustomMappings = TryGetArgumentValueSyntax<LambdaExpressionSyntax>(1, "customMappings", arguments, component.Diagnostics);
             component.IgnoreInSource = TryGetArgumentValueSyntax<ObjectCreationExpressionSyntax>(2, "sourceIgnoredProperties", arguments, component.Diagnostics);
             component.IgnoreInTarget = TryGetArgumentValueSyntax<ObjectCreationExpressionSyntax>(3, "targetIgnoredProperties", arguments, component.Diagnostics);
         }
@@ -477,7 +537,8 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                                      .ToArray() ?? new SyntaxNode[0];
 
                 var impropperLambdas = lambdas
-                                            .Where(x => x.Fits(SyntaxKind.SimpleLambdaExpression) == false)
+                                            .Where(x => x.Fits(SyntaxKind.SimpleLambdaExpression, 
+                                                               SyntaxKind.ParenthesizedLambdaExpression) == false)
                                             .ToArray();
 
                 if (impropperLambdas.Any())
@@ -492,7 +553,7 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                     return new ISymbol[0];
                 }
 
-                var propperLambdas = lambdas.OfType<SimpleLambdaExpressionSyntax>();
+                var propperLambdas = lambdas.OfType<LambdaExpressionSyntax>();
 
                 var memberSymbols = propperLambdas
                                         .Select(lambda => GetFieldOrPropertySymbolFromSimpleLambda(
@@ -517,7 +578,7 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
             (ISymbol[] sourceProps, ISymbol[] targetProps) 
                 ParseTouchedPropsFromMapping(INamedTypeSymbol sourceType, 
                                              INamedTypeSymbol targetType, 
-                                             ParenthesizedLambdaExpressionSyntax lambda, 
+                                             LambdaExpressionSyntax lambda, 
                                              List<Diagnostic> diagnostics)
         {
             if(lambda == null)
@@ -564,7 +625,7 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
             }           
         }
 
-            public static ISymbol GetFieldOrPropertySymbolFromSimpleLambda(INamedTypeSymbol ownerType, SimpleLambdaExpressionSyntax lambda, List<Diagnostic> diagnostics)
+            public static ISymbol GetFieldOrPropertySymbolFromSimpleLambda(INamedTypeSymbol ownerType, LambdaExpressionSyntax lambda, List<Diagnostic> diagnostics)
         {
             var lambdaText = lambda.GetText().ToString().Trim();
             string memberName = null;
@@ -630,8 +691,8 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
         public INamedTypeSymbol SourceTypeSymbol { get; set; }
         public INamedTypeSymbol TargetTypeSymbol { get; set; }
 
-        public ParenthesizedLambdaExpressionSyntax DefaultMappings { get; set; }
-        public ParenthesizedLambdaExpressionSyntax CustomMappings { get; set; }
+        public LambdaExpressionSyntax DefaultMappings { get; set; }
+        public LambdaExpressionSyntax CustomMappings { get; set; }
         public ObjectCreationExpressionSyntax IgnoreInSource { get; set; }
         public ObjectCreationExpressionSyntax IgnoreInTarget { get; set; }
 

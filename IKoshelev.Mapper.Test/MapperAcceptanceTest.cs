@@ -62,7 +62,7 @@ namespace IKoshelev.Mapper.Test
                     {
                         C = 15
                     },
-                    sourceIgnoredProperties: new IgnoreList<Foo>(
+                    targetIgnoredProperties: new IgnoreList<Bar>(
                         x => x.A
                     )));
 

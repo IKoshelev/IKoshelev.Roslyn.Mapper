@@ -16,6 +16,10 @@ namespace IKoshelev.Mapper
 
     public class ExpressionMappingComponents<TSource, TDestination> : IMappingComponents<TSource, TDestination> where TDestination : new()
     {
+        public ExpressionMappingComponents()
+        {
+        }
+
         public ExpressionMappingComponents(
             Expression<Func<TSource, TDestination>> defaultMappings,
             Expression<Func<TSource, TDestination>> customMappings = null,

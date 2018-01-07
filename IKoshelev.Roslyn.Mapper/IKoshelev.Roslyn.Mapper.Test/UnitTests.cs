@@ -168,10 +168,10 @@ namespace ConsoleApplication1
                 };
             }
 
-            VerifyCSharpDiagnostic(test, 
-                StructuralProblem("\"defaultMappings\" not found.", 19,21),
+            VerifyCSharpDiagnostic(test,            
                 StructuralProblem("Source type could not be resolved.", 19, 21),
                 StructuralProblem("Target type could not be resolved.", 19, 21),
+                StructuralProblem("\"defaultMappings\" not found.", 19, 21),
                 StructuralProblem("Argument for \"defaultMappings\" could not be processed.", 20, 25),
                 StructuralProblem("Argument for \"customMappings\" could not be processed.", 21, 25),
                 StructuralProblem("Argument for \"sourceIgnoredProperties\" could not be processed.", 22, 25),
@@ -209,7 +209,7 @@ namespace ConsoleApplication1
                             x => x.Ignore1
                         ),
                         targetIgnoredProperties: new IgnoreList<Trg>(
-                            x => x.Ignore2
+                            (x) => x.Ignore2
                         )));
             }
         }
@@ -249,13 +249,56 @@ namespace ConsoleApplication1
                             x => x.Ignore1
                         ),
                         targetIgnoredProperties: new IgnoreList<Trg>(
-                            x => x.Ignore2
+                            (x) => x.Ignore2
                         )));
             }
         }
     }" + ClassDefinitions;
 
             VerifyCSharpFix(test, fixTest);
+
+        }
+
+        [TestMethod]
+        public void AnalyzersCorrectlyPicksUpMembersTouchedInNonSimpleWaysInCustomMapings()
+        {
+            var test = @"
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Text;
+    using System.Threading.Tasks;
+    using System.Diagnostics;
+    using IKoshelev.Mapper; 
+
+    namespace ConsoleApplication1
+    {
+        class Test
+        {
+            public void Test()
+            {
+                var test = new ExpressionMapper<Src, Trg>(
+                    new ExpressionMappingComponents<Src, Trg>(
+                        (source) => new Trg()
+                        {
+                            B = source.B,
+                        },
+                        customMappings: (source) => new Trg()
+                        {
+                            C = 15,
+                            A = (100 * source.A) - 10
+                        },
+                        sourceIgnoredProperties: new IgnoreList<Src>(
+                            x => x.Ignore1
+                        ),
+                        targetIgnoredProperties: new IgnoreList<Trg>(
+                            x => x.Ignore2
+                        )));
+            }
+        }
+    }" + ClassDefinitions;
+
+            VerifyCSharpDiagnostic(test);
 
         }
 

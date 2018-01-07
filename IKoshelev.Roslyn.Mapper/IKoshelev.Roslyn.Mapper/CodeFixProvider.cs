@@ -20,7 +20,8 @@ namespace IKoshelev.Roslyn.Mapper
     [ExportCodeFixProvider(LanguageNames.CSharp, Name = nameof(IKoshelevRoslynMapperCodeFixProvider)), Shared]
     public class IKoshelevRoslynMapperCodeFixProvider : CodeFixProvider
     {
-        public const string Title = "Regenerate defaultMappings.";
+        public const string TitleRegenerateDefaultMappings = "Regenerate defaultMappings.";
+        public const string TitleGenerateMappingArguments = "Generate mapping arguments.";
 
         public sealed override ImmutableArray<string> FixableDiagnosticIds
         {
@@ -37,24 +38,142 @@ namespace IKoshelev.Roslyn.Mapper
             var diagnostic = context.Diagnostics.First();
             var diagnosticSpan = diagnostic.Location.SourceSpan;
 
-            string automappableMembers = null;
-            diagnostic.Properties?.TryGetValue(IKoshelevRoslynMapperAnalyzer.AutomappableMembersDictKey, out automappableMembers);
-
-            if(automappableMembers == null)
+            var membersClassification = diagnostic.Properties;
+            if(membersClassification.Any() == false)
             {
                 return;
             }
 
-            var root = await context.Document.GetSyntaxRootAsync(context.CancellationToken).ConfigureAwait(false);
+            var root = await context
+                                .Document
+                                .GetSyntaxRootAsync(context.CancellationToken)
+                                .ConfigureAwait(false);
 
-            var lambda = root.FindToken(diagnosticSpan.Start).Parent.AncestorsAndSelf().OfType<ParenthesizedLambdaExpressionSyntax>().First();
+            var lambda = root
+                            .FindToken(diagnosticSpan.Start)
+                            .Parent
+                            .AncestorsAndSelf().OfType<ParenthesizedLambdaExpressionSyntax>().FirstOrDefault();
 
-            context.RegisterCodeFix(
-                CodeAction.Create(
-                    title: Title,
-                    createChangedDocument: c => RegenerateDefaultMappingsAsync(context.Document, lambda, automappableMembers, c),
-                    equivalenceKey: Title),
-                diagnostic);
+            var mappingCreation = root
+                            .FindToken(diagnosticSpan.Start)
+                            .Parent
+                            .AncestorsAndSelf().OfType<ObjectCreationExpressionSyntax>().FirstOrDefault();
+
+            membersClassification.TryGetValue(
+                            IKoshelevRoslynMapperAnalyzer.AutomappableMembersDictKey,
+                            out string automappableMembers);
+
+            membersClassification.TryGetValue(
+                            IKoshelevRoslynMapperAnalyzer.NonAutomappableSourceMembersDictKey,
+                            out string nonAutomappableSourceMembers);
+
+            membersClassification.TryGetValue(
+                            IKoshelevRoslynMapperAnalyzer.NonAutomappableTargetMembersDictKey,
+                            out string nonAutomappableTargetMembers);
+
+            membersClassification.TryGetValue(
+                            IKoshelevRoslynMapperAnalyzer.SourceTypeNameDictKey,
+                            out string sourceTypeName);
+
+            membersClassification.TryGetValue(
+                            IKoshelevRoslynMapperAnalyzer.TargetTypeNameDictKey,
+                            out string targetTypeName);
+
+            if (lambda == null)
+            {
+                context.RegisterCodeFix(
+                   CodeAction.Create(
+                       title: TitleGenerateMappingArguments,
+                       createChangedDocument: c => RegenerateFull(
+                                                            context.Document,
+                                                            mappingCreation, 
+                                                            automappableMembers,
+                                                            nonAutomappableSourceMembers,
+                                                            nonAutomappableTargetMembers,
+                                                            sourceTypeName,
+                                                            targetTypeName,
+                                                            c),
+                       equivalenceKey: TitleRegenerateDefaultMappings),
+                   diagnostic);
+            }
+
+            if (lambda != null && automappableMembers != null)
+            {
+                context.RegisterCodeFix(
+                    CodeAction.Create(
+                        title: TitleRegenerateDefaultMappings,
+                        createChangedDocument: c => RegenerateDefaultMappingsAsync(context.Document, lambda, automappableMembers, c),
+                        equivalenceKey: TitleRegenerateDefaultMappings),
+                    diagnostic);
+            }
+        }
+
+        private async Task<Document> RegenerateFull(
+                                          Document document,
+                                          ObjectCreationExpressionSyntax objectCreation,
+                                          string automappableMembers,
+                                          string nonAutomappableSourceMembers,
+                                          string nonAutomappableTargetMembers,
+                                          string sourceTypeName,
+                                          string targetTypeName,
+                                          CancellationToken cancellationToken)
+        {
+            var sourceIdentifierName = "source";
+            var targetIdentifierName = "target";
+            var mappableMembersText = prepareMembersText(automappableMembers, (name) => $"{name}={sourceIdentifierName}.{name}");
+            var sourceIgnoreMembersText = prepareMembersText(nonAutomappableSourceMembers, (name) => $"({sourceTypeName} {sourceIdentifierName}) => {sourceIdentifierName}.{name}");
+            var targetIgnoreMembersText = prepareMembersText(nonAutomappableTargetMembers, (name) => $"({targetTypeName} {targetIdentifierName}) => {targetIdentifierName}.{name}");
+
+            var newObjectCreationText = $@"
+new ExpressionMappingComponents<{sourceTypeName}, {targetTypeName}>(
+    defaultMappings: ({sourceTypeName} {sourceIdentifierName}) => new {targetTypeName}()
+    {{
+        {mappableMembersText}}},
+    customMappings: ({sourceTypeName} {sourceIdentifierName}) => new {targetTypeName}()
+    {{
+    }},
+    sourceIgnoredProperties: new IgnoreList<{sourceTypeName}>(
+        {sourceIgnoreMembersText}),
+    targetIgnoredProperties: new IgnoreList<{targetTypeName}>(
+        {targetIgnoreMembersText}))";
+
+            var newObjectCreationRaw = ((ObjectCreationExpressionSyntax)SF.ParseExpression(newObjectCreationText));
+
+            newObjectCreationRaw = newObjectCreationRaw.WithAdditionalAnnotations(Formatter.Annotation);
+
+            var workspace = document.Project.Solution.Workspace;
+
+            var newObjectCreationFormatted = Formatter.Format(
+                                                            newObjectCreationRaw,
+                                                            Formatter.Annotation,
+                                                            workspace,
+                                                            workspace.Options,
+                                                            cancellationToken)
+                                                            as ObjectCreationExpressionSyntax;
+
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+
+            var newDocumentRoot = root.ReplaceNode(objectCreation, newObjectCreationFormatted);
+
+            document = document.WithSyntaxRoot(newDocumentRoot);
+
+            return document;
+
+            string prepareMembersText(string unsplitNames, Func<string, string> transform, string separator = ",")
+            {
+                var transformed = unsplitNames?
+                                            .Split(';')
+                                            .Select(x => transform(x) + separator + "\r\n")
+                                            .ToArray();
+
+                var preparedJoinedNames = string.Join("", transformed);
+
+                var lengthWithoutLastSeparator = preparedJoinedNames.Length - (separator.Length + 2);
+
+                preparedJoinedNames = preparedJoinedNames.Substring(0, lengthWithoutLastSeparator) + "\r\n";
+
+                return preparedJoinedNames;
+            }
         }
 
         private async Task<Document> RegenerateDefaultMappingsAsync(
