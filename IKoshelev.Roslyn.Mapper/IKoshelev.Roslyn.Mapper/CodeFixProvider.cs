@@ -172,9 +172,9 @@ namespace IKoshelev.Roslyn.Mapper
                         createChangedDocument: c => AppendIgnoreList(context.Document,
                                                                         mappingCreation, 
                                                                         existingIgnore, 
-                                                                        "source", 
-                                                                        sourceTypeName, 
-                                                                        sourceUnmappedMembers, 
+                                                                        "source",
+                                                                        sourceUnmappedMembers,
+                                                                        sourceTypeName,                                                                   
                                                                         c),
                         equivalenceKey: TitleRegenerateDefaultMappings),
                     diagnostic);
@@ -197,8 +197,8 @@ namespace IKoshelev.Roslyn.Mapper
                                                                         mappingCreation, 
                                                                         existingIgnore, 
                                                                         "target", 
-                                                                        targetTypeName, 
-                                                                        targetUnmappedMembers, 
+                                                                        targetUnmappedMembers,
+                                                                        targetTypeName,
                                                                         c),
                         equivalenceKey: TitleRegenerateDefaultMappings),
                     diagnostic);
@@ -206,13 +206,13 @@ namespace IKoshelev.Roslyn.Mapper
         }
 
         private async Task<Document> AppendIgnoreList(
-            Document document,
-            ObjectCreationExpressionSyntax wholeMappingCreation,
-            ObjectCreationExpressionSyntax existingIgnoreList,
-            string mappingSideType,
-            string membersToAppend,
-            string typeName,
-            CancellationToken cancellationToken)
+                                        Document document,
+                                        ObjectCreationExpressionSyntax wholeMappingCreation,
+                                        ObjectCreationExpressionSyntax existingIgnoreList,
+                                        string mappingSideType,
+                                        string membersToAppend,
+                                        string typeName,
+                                        CancellationToken cancellationToken)
         {
             var parsedMembersToAppend = membersToAppend.Split(';');
 
