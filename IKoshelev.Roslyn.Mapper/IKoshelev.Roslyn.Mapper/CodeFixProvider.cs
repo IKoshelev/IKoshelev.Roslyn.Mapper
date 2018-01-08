@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Composition;
 using System.Linq;
@@ -8,12 +7,10 @@ using System.Threading.Tasks;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CodeActions;
-using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Rename;
-using Microsoft.CodeAnalysis.Text;
 using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 using Microsoft.CodeAnalysis.Formatting;
+using Microsoft.CodeAnalysis.Text;
 
 namespace IKoshelev.Roslyn.Mapper
 {
@@ -22,6 +19,8 @@ namespace IKoshelev.Roslyn.Mapper
     {
         public const string TitleRegenerateDefaultMappings = "Regenerate defaultMappings.";
         public const string TitleGenerateMappingArguments = "Generate mapping arguments.";
+        public const string TitleAddIgnoreMembersSource = "Add unmapped source members to ignore list.";
+        public const string TitleAddIgnoreMembersTarget = "Add unmapped target members to ignore list.";
 
         public sealed override ImmutableArray<string> FixableDiagnosticIds
         {
@@ -38,8 +37,17 @@ namespace IKoshelev.Roslyn.Mapper
             var diagnostic = context.Diagnostics.First();
             var diagnosticSpan = diagnostic.Location.SourceSpan;
 
-            var membersClassification = diagnostic.Properties;
-            if(membersClassification.Any() == false)
+            var passedProperties = diagnostic.Properties;
+            if (passedProperties?.Any() != true)
+            {
+                return;
+            }
+
+            passedProperties.TryGetValue(
+                                    IKoshelevRoslynMapperAnalyzer.CodeFixActionTypeDictKey,
+                                    out string codeFixAction);
+
+            if(codeFixAction == null)
             {
                 return;
             }
@@ -49,44 +57,40 @@ namespace IKoshelev.Roslyn.Mapper
                                 .GetSyntaxRootAsync(context.CancellationToken)
                                 .ConfigureAwait(false);
 
-            var lambda = root
-                            .FindToken(diagnosticSpan.Start)
-                            .Parent
-                            .AncestorsAndSelf().OfType<ParenthesizedLambdaExpressionSyntax>().FirstOrDefault();
-
-            var mappingCreation = root
-                            .FindToken(diagnosticSpan.Start)
-                            .Parent
-                            .AncestorsAndSelf().OfType<ObjectCreationExpressionSyntax>().FirstOrDefault();
-
-            membersClassification.TryGetValue(
-                            IKoshelevRoslynMapperAnalyzer.AutomappableMembersDictKey,
-                            out string automappableMembers);
-
-            membersClassification.TryGetValue(
-                            IKoshelevRoslynMapperAnalyzer.NonAutomappableSourceMembersDictKey,
-                            out string nonAutomappableSourceMembers);
-
-            membersClassification.TryGetValue(
-                            IKoshelevRoslynMapperAnalyzer.NonAutomappableTargetMembersDictKey,
-                            out string nonAutomappableTargetMembers);
-
-            membersClassification.TryGetValue(
-                            IKoshelevRoslynMapperAnalyzer.SourceTypeNameDictKey,
-                            out string sourceTypeName);
-
-            membersClassification.TryGetValue(
-                            IKoshelevRoslynMapperAnalyzer.TargetTypeNameDictKey,
-                            out string targetTypeName);
-
-            if (lambda == null)
+            if (codeFixAction == IKoshelevRoslynMapperAnalyzer.CodeFixActionGenerateDefaultMappings)
             {
+                var mappingCreation = root
+                        .FindToken(diagnosticSpan.Start)
+                        .Parent
+                        .AncestorsAndSelf().OfType<ObjectCreationExpressionSyntax>().FirstOrDefault();
+
+                passedProperties.TryGetValue(
+                                IKoshelevRoslynMapperAnalyzer.AutomappableMembersDictKey,
+                                out string automappableMembers);
+
+                passedProperties.TryGetValue(
+                                IKoshelevRoslynMapperAnalyzer.NonAutomappableSourceMembersDictKey,
+                                out string nonAutomappableSourceMembers);
+
+                passedProperties.TryGetValue(
+                                IKoshelevRoslynMapperAnalyzer.NonAutomappableTargetMembersDictKey,
+                                out string nonAutomappableTargetMembers);
+
+                passedProperties.TryGetValue(
+                                IKoshelevRoslynMapperAnalyzer.SourceTypeNameDictKey,
+                                out string sourceTypeName);
+
+                passedProperties.TryGetValue(
+                                IKoshelevRoslynMapperAnalyzer.TargetTypeNameDictKey,
+                                out string targetTypeName);
+
+
                 context.RegisterCodeFix(
                    CodeAction.Create(
                        title: TitleGenerateMappingArguments,
                        createChangedDocument: c => RegenerateFull(
                                                             context.Document,
-                                                            mappingCreation, 
+                                                            mappingCreation,
                                                             automappableMembers,
                                                             nonAutomappableSourceMembers,
                                                             nonAutomappableTargetMembers,
@@ -97,15 +101,130 @@ namespace IKoshelev.Roslyn.Mapper
                    diagnostic);
             }
 
-            if (lambda != null && automappableMembers != null)
+            if (codeFixAction == IKoshelevRoslynMapperAnalyzer.CodeFixActionRegenerateDefaultMappings)
+            {
+                var lambda = root
+                                .FindToken(diagnosticSpan.Start)
+                                .Parent
+                                .AncestorsAndSelf().OfType<LambdaExpressionSyntax>().FirstOrDefault();
+
+                passedProperties.TryGetValue(
+                                    IKoshelevRoslynMapperAnalyzer.AutomappableMembersDictKey,
+                                    out string automappableMembers);
+
+                context.RegisterCodeFix(
+                            CodeAction.Create(
+                                title: TitleRegenerateDefaultMappings,
+                                createChangedDocument: c => RegenerateDefaultMappingsAsync(context.Document, lambda, automappableMembers, c),
+                                equivalenceKey: TitleRegenerateDefaultMappings),
+                            diagnostic);
+            }
+
+            if (codeFixAction == IKoshelevRoslynMapperAnalyzer.CodeFixActionAddUnmappedMembersToIgnore)
+            {
+                var mappingCreation = root
+                                        .FindToken(diagnosticSpan.Start)
+                                        .Parent
+                                        .AncestorsAndSelf().OfType<ObjectCreationExpressionSyntax>().FirstOrDefault();
+
+                AddAppendIgnoreMembersFixesIfPossible(
+                                                    context,
+                                                    diagnostic,
+                                                    diagnosticSpan,
+                                                    passedProperties,
+                                                    mappingCreation,
+                                                    root);
+            }
+        }
+
+        private void AddAppendIgnoreMembersFixesIfPossible(
+                                            CodeFixContext context, 
+                                            Diagnostic diagnostic, 
+                                            TextSpan diagnosticSpan, 
+                                            ImmutableDictionary<string, string> membersClassification,
+                                            ObjectCreationExpressionSyntax mappingsCreation,
+                                            SyntaxNode root)
+        {
+            var additionalLocation = diagnostic.AdditionalLocations?.FirstOrDefault();
+
+            ObjectCreationExpressionSyntax existingIgnore = null;
+            if (additionalLocation != null)
+            {
+                existingIgnore = root
+                                    .FindToken(additionalLocation.SourceSpan.Start)
+                                    .Parent
+                                    .AncestorsAndSelf().OfType<ObjectCreationExpressionSyntax>().FirstOrDefault();
+            }
+
+            membersClassification.TryGetValue(
+                 IKoshelevRoslynMapperAnalyzer.SourceMembersToIgnoreDictKey,
+                 out string sourceUnmappedMembers);
+
+            if (sourceUnmappedMembers != null)
             {
                 context.RegisterCodeFix(
                     CodeAction.Create(
-                        title: TitleRegenerateDefaultMappings,
-                        createChangedDocument: c => RegenerateDefaultMappingsAsync(context.Document, lambda, automappableMembers, c),
+                        title: TitleAddIgnoreMembersSource,
+                        createChangedDocument: c => AppendIgnoreList(context.Document, mappingsCreation, existingIgnore, "source", sourceUnmappedMembers, c),
                         equivalenceKey: TitleRegenerateDefaultMappings),
                     diagnostic);
             }
+
+            membersClassification.TryGetValue(
+                 IKoshelevRoslynMapperAnalyzer.TargeMembersToIgnoreDictKey,
+                 out string targetUnmappedMembers);
+
+            if (targetUnmappedMembers != null)
+            {
+                context.RegisterCodeFix(
+                    CodeAction.Create(
+                        title: TitleAddIgnoreMembersSource,
+                        createChangedDocument: c => AppendIgnoreList(context.Document, mappingsCreation, existingIgnore, "target", targetUnmappedMembers, c),
+                        equivalenceKey: TitleRegenerateDefaultMappings),
+                    diagnostic);
+            }
+        }
+
+        private async Task<Document> AppendIgnoreList(
+            Document document,
+            ObjectCreationExpressionSyntax wholeMappingCreation,
+            ObjectCreationExpressionSyntax existingIgnoreList,
+            string paramName,
+            string membersToAppend,
+            CancellationToken cancellationToken)
+        {
+            var parsedMembersToAppend = membersToAppend.Split(';');
+
+            var lambdasToAppend = parsedMembersToAppend
+                                        .Select(x => $"({paramName}) => {paramName}.{x}")
+                                        .Select(x => SF.ParseExpression(x) as LambdaExpressionSyntax)
+                                        .Select(x => SF.Argument(x).WithLeadingTrivia(SF.LineFeed))
+                                        .ToArray();
+
+            if(existingIgnoreList == null)
+            {
+                throw new NotImplementedException();
+            }
+
+            var existingIgnoreLambdas = existingIgnoreList
+                                                .ArgumentList
+                                                .Arguments
+                                                .Select(x => x.Expression.WithoutTrivia())
+                                                .Select(x => SF.Argument(x).WithLeadingTrivia(SF.LineFeed))
+                                                .ToArray();
+
+            var combinedLambdas = new SeparatedSyntaxList<ArgumentSyntax>();
+            combinedLambdas = combinedLambdas.AddRange(existingIgnoreLambdas);
+            combinedLambdas = combinedLambdas.AddRange(lambdasToAppend);
+
+            var newArgumentList = SF.ArgumentList(combinedLambdas);
+
+            var newIgnoreList = existingIgnoreList
+                                        .WithArgumentList(newArgumentList);
+
+             document = await ParseSyntaxTextAndReplaceNode(document, existingIgnoreList, newIgnoreList, cancellationToken);
+
+            return document;
         }
 
         private async Task<Document> RegenerateFull(
@@ -160,33 +279,9 @@ new ExpressionMappingComponents<{sourceTypeName}, {targetTypeName}>(
             }
         }
 
-        private static async Task<Document> ParseSyntaxTextAndReplaceNode<T>
-            (Document document, T oldNode, T newNode, CancellationToken cancellationToken)
-            where T: SyntaxNode
-        {
-            newNode = newNode.WithAdditionalAnnotations(Formatter.Annotation);
-
-            var workspace = document.Project.Solution.Workspace;
-
-            var newObjectCreationFormatted = Formatter.Format(
-                                                            newNode,
-                                                            Formatter.Annotation,
-                                                            workspace,
-                                                            workspace.Options,
-                                                            cancellationToken)
-                                                            as ObjectCreationExpressionSyntax;
-
-            var root = await document.GetSyntaxRootAsync(cancellationToken);
-
-            var newDocumentRoot = root.ReplaceNode(oldNode, newNode);
-
-            document = document.WithSyntaxRoot(newDocumentRoot);
-            return document;
-        }
-
         private async Task<Document> RegenerateDefaultMappingsAsync(
             Document document, 
-            ParenthesizedLambdaExpressionSyntax lambda,
+            LambdaExpressionSyntax lambda,
             string automappableMembers,
             CancellationToken cancellationToken)
         {
@@ -218,6 +313,30 @@ $@"new X{{
 
             document = await ParseSyntaxTextAndReplaceNode(document, lambda, newRawLambda, cancellationToken);
 
+            return document;
+        }
+
+        private static async Task<Document> ParseSyntaxTextAndReplaceNode<T>
+            (Document document, T oldNode, T newNode, CancellationToken cancellationToken)
+            where T : SyntaxNode
+        {
+            newNode = newNode.WithAdditionalAnnotations(Formatter.Annotation);
+
+            var workspace = document.Project.Solution.Workspace;
+
+            var newObjectCreationFormatted = Formatter.Format(
+                                                            newNode,
+                                                            Formatter.Annotation,
+                                                            workspace,
+                                                            workspace.Options,
+                                                            cancellationToken)
+                                                            as ObjectCreationExpressionSyntax;
+
+            var root = await document.GetSyntaxRootAsync(cancellationToken);
+
+            var newDocumentRoot = root.ReplaceNode(oldNode, newNode);
+
+            document = document.WithSyntaxRoot(newDocumentRoot);
             return document;
         }
     }

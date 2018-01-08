@@ -21,6 +21,13 @@ namespace IKoshelev.Roslyn.Mapper
         public const string NonAutomappableTargetMembersDictKey = "nonAutomappableTargetMembers";
         public const string SourceTypeNameDictKey = "sourceTypeNameDictKey";
         public const string TargetTypeNameDictKey = "targetTypeNameDictKey";
+        public const string SourceMembersToIgnoreDictKey = "sourceUnmappedMembers";
+        public const string TargeMembersToIgnoreDictKey = "targetUnmappedMembers";
+        public const string CodeFixActionTypeDictKey = "CodeFixActionType";
+
+        public const string CodeFixActionGenerateDefaultMappings = "CodeFixActionGenerateDefaultMappings";
+        public const string CodeFixActionRegenerateDefaultMappings = "CodeFixActionRegenerateDefaultMappings";
+        public const string CodeFixActionAddUnmappedMembersToIgnore = "CodeFixActionAddUnmappedMembersToIgnore";
 
         public static readonly string MappingDefinitionStructuralIntegrityRuleTitle = "Rolsyn.Mapper mapping has structural a problem.";
         public static readonly string MappingDefinitionStructuralIntegrityRuleMessageFormat = "Roslyn mapping has a structural problem. {0}";
@@ -138,7 +145,7 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                 var diag = Diagnostic.Create(
                                             MapperDefinitionMissingMemberRule,
                                             expr.DefaultMappings.GetLocation(),
-                                            membersClassificationDict,
+                                            membersClassificationDict.Add(CodeFixActionTypeDictKey, CodeFixActionRegenerateDefaultMappings),
                                             $"Some membmers with identical names are not mapped. " +
                                             $"Please choose '{IKoshelevRoslynMapperCodeFixProvider.TitleRegenerateDefaultMappings}' or " +
                                             $"manually handle missing members: {unmappedCompatibleMembersJoined}.");
@@ -150,27 +157,40 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                                         expr.SourceTypeSymbol,
                                         expr.SymbolsMappedInSource,
                                         expr.SymbolsIgnoredInSource,
-                                        missing =>
-                                        {
-                                            var diag = Diagnostic.Create(
-                                                                    MapperDefinitionMissingMemberRule,
-                                                                    expr.CreationExpressionSyntax.GetLocation(),
-                                                                    $"Source member {missing.Name} is not mapped.");
-                                            context.ReportDiagnostic(diag);
-                                        });
+                                        getNotifyFn("Source", SourceMembersToIgnoreDictKey, expr.IgnoreInSource));
 
             CheckAndNotifyMissingMembers(
                             expr.TargetTypeSymbol,
                             expr.SymbolsMappedInTarget,
                             expr.SymbolsIgnoredInTarget,
-                            missing =>
-                            {
-                                var diag = Diagnostic.Create(
-                                                        MapperDefinitionMissingMemberRule,
-                                                        expr.CreationExpressionSyntax.GetLocation(),
-                                                        $"Target member {missing.Name} is not mapped.");
-                                context.ReportDiagnostic(diag);
-                            });
+                            getNotifyFn("Target", TargeMembersToIgnoreDictKey, expr.IgnoreInTarget));
+
+            return;
+
+            Action<ISymbol[], ISymbol[]> getNotifyFn(string memberType, string key, ObjectCreationExpressionSyntax existingIgnore) {
+                return (missing, alreadyIgnored) =>
+                {
+                    var missingNames = string.Join(";", missing.Select(x => x.Name).ToArray());
+
+                    var verb = (missing.Length > 1) 
+                                                ? "are" 
+                                                : "is";
+
+                    var dict = (new Dictionary<string, string>() {
+                                    { key, missingNames}
+                                })
+                                .ToImmutableDictionary();
+
+                    var diag = Diagnostic.Create(
+                                            MapperDefinitionMissingMemberRule,
+                                            expr.CreationExpressionSyntax.GetLocation(),
+                                            new Location[] { existingIgnore.GetLocation() },
+                                            dict.Add(CodeFixActionTypeDictKey, CodeFixActionAddUnmappedMembersToIgnore),
+                                            $"{memberType} member {missingNames} {verb} not mapped.");
+
+                    context.ReportDiagnostic(diag);
+                };
+            }
         }
 
         private static void GetMemberClassifications(
@@ -252,7 +272,7 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
             return (mappable, nonMappableSource, nonMappableTarget);
         }
 
-        private static void CheckAndNotifyMissingMembers(INamedTypeSymbol type, ISymbol[] mapped, ISymbol[] ignored, Action<ISymbol> notifyFoSingle)
+        private static void CheckAndNotifyMissingMembers(INamedTypeSymbol type, ISymbol[] mapped, ISymbol[] ignored, Action<ISymbol[], ISymbol[]> notify)
         {
             var allPublicFieldsAndProps = type
                                             .GetMembers()
@@ -264,11 +284,10 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                                 .Where(symbol => mapped.Contains(symbol) == false
                                                 && ignored.Contains(symbol) == false)
                                 .ToArray();
-
-            foreach(var symbol in missing)
+            if (missing.Any())
             {
-                notifyFoSingle(symbol);        
-            }            
+                notify(missing, ignored);
+            }
         }
 
         private static void ParseSymbolsFromMappingsAndIgnores(ExpressionMappingComponent expr)
@@ -355,8 +374,8 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
 
                     diag3 = Diagnostic.Create(
                                             MapperDefinitionStructuralIntegrityRule, 
-                                            component.CreationExpressionSyntax.GetLocation(), 
-                                            membersClassificationDict, 
+                                            component.CreationExpressionSyntax.GetLocation(),
+                                            membersClassificationDict.Add(CodeFixActionTypeDictKey, CodeFixActionGenerateDefaultMappings),
                                             "\"defaultMappings\" not found.");                  
                 }
                 else

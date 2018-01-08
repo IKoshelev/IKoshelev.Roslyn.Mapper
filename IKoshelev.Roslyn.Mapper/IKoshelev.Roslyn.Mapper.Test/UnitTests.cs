@@ -6,6 +6,7 @@ using System;
 using TestHelper;
 using IKoshelev.Roslyn.Mapper;
 using System.Linq.Expressions;
+using System.Collections.Generic;
 
 namespace IKoshelev.Roslyn.Mapper.Test
 {
@@ -119,11 +120,169 @@ namespace ConsoleApplication1
         }
     }" + ClassDefinitions;
 
-            VerifyCSharpDiagnostic(test,
-                MappingProblem("Source member Ignore1 is not mapped.", 17,21),
-                MappingProblem("Target member C is not mapped.", 17, 21),
-                MappingProblem("Target member Ignore2 is not mapped.", 17, 21));
+            VerifyCSharpDiagnostic(test);
         }
+
+        [TestMethod]
+        public void WhenMembersAreMissingFromIgnoreACodeFixWillBeOfferedToAddThem_AddToEmptyIgnoreListCase()
+        {
+            var test = @"
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Text;
+    using System.Threading.Tasks;
+    using System.Diagnostics;
+    using IKoshelev.Mapper; 
+
+    namespace ConsoleApplication1
+    {
+        class Test
+        {
+            public void Test()
+            {
+                var test = new ExpressionMapper<Src, Trg>(
+                    new ExpressionMappingComponents<Src, Trg>(
+                        (source) => new Trg()
+                        {
+                            A = source.A,
+                            B = source.B,
+                        },
+                        (source) => new Trg()
+                        {
+                            C = 10
+                        },
+                        sourceIgnoredProperties: new IgnoreList<Src>(
+                            x => x.Ignore1
+                        ),
+                        targetIgnoredProperties: new IgnoreList<Trg>(                           
+                        )));
+            }
+        }
+    }" + ClassDefinitions;
+
+            VerifyCSharpDiagnostic(test,
+                MappingProblem("Target member Ignore2 is not mapped.", 17, 21, (30, 50)));
+
+            var fixTest = @"
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Text;
+    using System.Threading.Tasks;
+    using System.Diagnostics;
+    using IKoshelev.Mapper; 
+
+    namespace ConsoleApplication1
+    {
+        class Test
+        {
+            public void Test()
+            {
+                var test = new ExpressionMapper<Src, Trg>(
+                    new ExpressionMappingComponents<Src, Trg>(
+                        (source) => new Trg()
+                        {
+                            A = source.A,
+                            B = source.B,
+                        },
+                        (source) => new Trg()
+                        {
+                            C = 10
+                        },
+                        sourceIgnoredProperties: new IgnoreList<Src>(
+                            x => x.Ignore1
+                        ),
+                        targetIgnoredProperties: new IgnoreList<Trg>(
+(target) => target.Ignore2)));
+            }
+        }
+    }" + ClassDefinitions;
+
+            VerifyCSharpFix(test, fixTest);
+        }
+
+        [TestMethod]
+        public void WhenMembersAreMissingFromIgnoreACodeFixWillBeOfferedToAddThem_AddToNonEmptyIgnoreListCase()
+        {
+            var test = @"
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Text;
+    using System.Threading.Tasks;
+    using System.Diagnostics;
+    using IKoshelev.Mapper; 
+
+    namespace ConsoleApplication1
+    {
+        class Test
+        {
+            public void Test()
+            {
+                var test = new ExpressionMapper<Src, Trg>(
+                    new ExpressionMappingComponents<Src, Trg>(
+                        (source) => new Trg()
+                        {
+                            A = source.A,
+                        },
+                        (source) => new Trg()
+                        {
+                            C = 10
+                        },
+                        sourceIgnoredProperties: new IgnoreList<Src>(
+                            x => x.Ignore1,
+                            x => x.B
+                        ),
+                        targetIgnoredProperties: new IgnoreList<Trg>(                           
+                            x => x.B
+                        )));
+            }
+        }
+    }" + ClassDefinitions;
+
+            VerifyCSharpDiagnostic(test,
+                MappingProblem("Target member Ignore2 is not mapped.", 17, 21, (30, 50)));
+
+            var fixTest = @"
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Text;
+    using System.Threading.Tasks;
+    using System.Diagnostics;
+    using IKoshelev.Mapper; 
+
+    namespace ConsoleApplication1
+    {
+        class Test
+        {
+            public void Test()
+            {
+                var test = new ExpressionMapper<Src, Trg>(
+                    new ExpressionMappingComponents<Src, Trg>(
+                        (source) => new Trg()
+                        {
+                            A = source.A,
+                        },
+                        (source) => new Trg()
+                        {
+                            C = 10
+                        },
+                        sourceIgnoredProperties: new IgnoreList<Src>(
+                            x => x.Ignore1,
+                            x => x.B
+                        ),
+                        targetIgnoredProperties: new IgnoreList<Trg>(
+x => x.B,
+(target) => target.Ignore2)));
+            }
+        }
+    }" + ClassDefinitions;
+
+            VerifyCSharpFix(test, fixTest);
+        }
+
 
         [TestMethod]
         public void OnStructuralProblemItIsReporpted()
@@ -368,17 +527,31 @@ new ExpressionMappingComponents<Src, Trg>(
             };
         }
 
-        DiagnosticResult MappingProblem(string message, int line, int column)
+        DiagnosticResult MappingProblem(
+                                string message, 
+                                int line, 
+                                int column, 
+                                (int line, int column)? additionalLocation = null)
         {
+            var locations = new List<DiagnosticResultLocation>()
+                            {
+                                new DiagnosticResultLocation("Test0.cs", line, column)
+                            };
+
+            if(additionalLocation != null)
+            {
+                locations.Add(new DiagnosticResultLocation(
+                                        "Test0.cs",
+                                        additionalLocation.Value.line,
+                                        additionalLocation.Value.column));
+            }
+
             return new DiagnosticResult
             {
                 Id = "IKoshelevRoslynMapper",
                 Message = String.Format(IKoshelevRoslynMapperAnalyzer.MappingDefinitionMissingMembergRuleMessageFormat, message),
                 Severity = DiagnosticSeverity.Error,
-                Locations =
-                new[] {
-                            new DiagnosticResultLocation("Test0.cs", line, column)
-                    }
+                Locations = locations.ToArray()
             };
         }
 
