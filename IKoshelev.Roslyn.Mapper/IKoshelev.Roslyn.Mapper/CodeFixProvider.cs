@@ -11,6 +11,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 using Microsoft.CodeAnalysis.Formatting;
 using Microsoft.CodeAnalysis.Text;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace IKoshelev.Roslyn.Mapper
 {
@@ -122,17 +123,11 @@ namespace IKoshelev.Roslyn.Mapper
 
             if (codeFixAction == IKoshelevRoslynMapperAnalyzer.CodeFixActionAddUnmappedMembersToIgnore)
             {
-                var mappingCreation = root
-                                        .FindToken(diagnosticSpan.Start)
-                                        .Parent
-                                        .AncestorsAndSelf().OfType<ObjectCreationExpressionSyntax>().FirstOrDefault();
-
                 AddAppendIgnoreMembersFixesIfPossible(
                                                     context,
                                                     diagnostic,
                                                     diagnosticSpan,
                                                     passedProperties,
-                                                    mappingCreation,
                                                     root);
             }
         }
@@ -141,10 +136,14 @@ namespace IKoshelev.Roslyn.Mapper
                                             CodeFixContext context, 
                                             Diagnostic diagnostic, 
                                             TextSpan diagnosticSpan, 
-                                            ImmutableDictionary<string, string> membersClassification,
-                                            ObjectCreationExpressionSyntax mappingsCreation,
+                                            ImmutableDictionary<string, string> passedProperties,
                                             SyntaxNode root)
         {
+            var mappingCreation = root
+                                    .FindToken(diagnosticSpan.Start)
+                                    .Parent
+                                    .AncestorsAndSelf().OfType<ObjectCreationExpressionSyntax>().FirstOrDefault();
+
             var additionalLocation = diagnostic.AdditionalLocations?.FirstOrDefault();
 
             ObjectCreationExpressionSyntax existingIgnore = null;
@@ -156,30 +155,51 @@ namespace IKoshelev.Roslyn.Mapper
                                     .AncestorsAndSelf().OfType<ObjectCreationExpressionSyntax>().FirstOrDefault();
             }
 
-            membersClassification.TryGetValue(
+            passedProperties.TryGetValue(
                  IKoshelevRoslynMapperAnalyzer.SourceMembersToIgnoreDictKey,
                  out string sourceUnmappedMembers);
 
-            if (sourceUnmappedMembers != null)
+
+            passedProperties.TryGetValue(
+                            IKoshelevRoslynMapperAnalyzer.SourceTypeNameDictKey,
+                            out string sourceTypeName);
+
+            if (sourceUnmappedMembers != null && sourceTypeName != null)
             {
                 context.RegisterCodeFix(
                     CodeAction.Create(
                         title: TitleAddIgnoreMembersSource,
-                        createChangedDocument: c => AppendIgnoreList(context.Document, mappingsCreation, existingIgnore, "source", sourceUnmappedMembers, c),
+                        createChangedDocument: c => AppendIgnoreList(context.Document,
+                                                                        mappingCreation, 
+                                                                        existingIgnore, 
+                                                                        "source", 
+                                                                        sourceTypeName, 
+                                                                        sourceUnmappedMembers, 
+                                                                        c),
                         equivalenceKey: TitleRegenerateDefaultMappings),
                     diagnostic);
             }
 
-            membersClassification.TryGetValue(
+            passedProperties.TryGetValue(
+                IKoshelevRoslynMapperAnalyzer.TargetTypeNameDictKey,
+                out string targetTypeName);
+
+            passedProperties.TryGetValue(
                  IKoshelevRoslynMapperAnalyzer.TargeMembersToIgnoreDictKey,
                  out string targetUnmappedMembers);
 
-            if (targetUnmappedMembers != null)
+            if (targetUnmappedMembers != null && targetTypeName != null)
             {
                 context.RegisterCodeFix(
                     CodeAction.Create(
                         title: TitleAddIgnoreMembersSource,
-                        createChangedDocument: c => AppendIgnoreList(context.Document, mappingsCreation, existingIgnore, "target", targetUnmappedMembers, c),
+                        createChangedDocument: c => AppendIgnoreList(context.Document,
+                                                                        mappingCreation, 
+                                                                        existingIgnore, 
+                                                                        "target", 
+                                                                        targetTypeName, 
+                                                                        targetUnmappedMembers, 
+                                                                        c),
                         equivalenceKey: TitleRegenerateDefaultMappings),
                     diagnostic);
             }
@@ -189,29 +209,58 @@ namespace IKoshelev.Roslyn.Mapper
             Document document,
             ObjectCreationExpressionSyntax wholeMappingCreation,
             ObjectCreationExpressionSyntax existingIgnoreList,
-            string paramName,
+            string mappingSideType,
             string membersToAppend,
+            string typeName,
             CancellationToken cancellationToken)
         {
             var parsedMembersToAppend = membersToAppend.Split(';');
 
             var lambdasToAppend = parsedMembersToAppend
-                                        .Select(x => $"({paramName}) => {paramName}.{x}")
+                                        .Select(x => $"({mappingSideType}) => {mappingSideType}.{x}")
                                         .Select(x => SF.ParseExpression(x) as LambdaExpressionSyntax)
                                         .Select(x => SF.Argument(x).WithLeadingTrivia(SF.LineFeed))
                                         .ToArray();
 
             if(existingIgnoreList == null)
             {
-                throw new NotImplementedException();
+                var paramColon = $"{mappingSideType}IgnoredProperties";
+
+                var nameColon = SF
+                                 .NameColon(paramColon)
+                                 .WithLeadingTrivia(SF.LineFeed);
+
+                var ignoreListText =
+$@"new IgnoreList<{typeName}>(
+)";
+
+                existingIgnoreList =  SF.ParseExpression(ignoreListText) as ObjectCreationExpressionSyntax;
+                var ignoreListMarker = new SyntaxAnnotation();
+                existingIgnoreList = existingIgnoreList.WithAdditionalAnnotations(ignoreListMarker);
+
+                var newIgnoreListArgument = SF.Argument(nameColon, SF.Token(SyntaxKind.None), existingIgnoreList);
+
+                var arguments = wholeMappingCreation.ArgumentList.Arguments;
+
+                arguments = arguments.Add(newIgnoreListArgument);
+
+                var newArguemntsList =  wholeMappingCreation.ArgumentList.WithArguments(arguments);
+
+                var newMappingCreation = wholeMappingCreation.WithArgumentList(newArguemntsList);
+
+                document = await ParseSyntaxTextAndReplaceNode(document, wholeMappingCreation, newMappingCreation, cancellationToken);
+
+                var currentNodes = (await document.GetSyntaxRootAsync()).DescendantNodes();
+
+                existingIgnoreList = currentNodes.Where(node => node.HasAnnotation(ignoreListMarker)).Single() as ObjectCreationExpressionSyntax;
             }
 
             var existingIgnoreLambdas = existingIgnoreList
-                                                .ArgumentList
-                                                .Arguments
-                                                .Select(x => x.Expression.WithoutTrivia())
-                                                .Select(x => SF.Argument(x).WithLeadingTrivia(SF.LineFeed))
-                                                .ToArray();
+                                                    .ArgumentList
+                                                    .Arguments
+                                                    .Select(x => x.Expression.WithoutTrivia())
+                                                    .Select(x => SF.Argument(x).WithLeadingTrivia(SF.LineFeed))
+                                                    .ToArray();
 
             var combinedLambdas = new SeparatedSyntaxList<ArgumentSyntax>();
             combinedLambdas = combinedLambdas.AddRange(existingIgnoreLambdas);
@@ -222,7 +271,7 @@ namespace IKoshelev.Roslyn.Mapper
             var newIgnoreList = existingIgnoreList
                                         .WithArgumentList(newArgumentList);
 
-             document = await ParseSyntaxTextAndReplaceNode(document, existingIgnoreList, newIgnoreList, cancellationToken);
+            document = await ParseSyntaxTextAndReplaceNode(document, existingIgnoreList, newIgnoreList, cancellationToken);
 
             return document;
         }

@@ -157,17 +157,21 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                                         expr.SourceTypeSymbol,
                                         expr.SymbolsMappedInSource,
                                         expr.SymbolsIgnoredInSource,
-                                        getNotifyFn("Source", SourceMembersToIgnoreDictKey, expr.IgnoreInSource));
+                                        getNotifyFn("Source", SourceMembersToIgnoreDictKey, membersClassificationDict, expr.IgnoreInSource));
 
             CheckAndNotifyMissingMembers(
                             expr.TargetTypeSymbol,
                             expr.SymbolsMappedInTarget,
                             expr.SymbolsIgnoredInTarget,
-                            getNotifyFn("Target", TargeMembersToIgnoreDictKey, expr.IgnoreInTarget));
+                            getNotifyFn("Target", TargeMembersToIgnoreDictKey, membersClassificationDict, expr.IgnoreInTarget));
 
             return;
 
-            Action<ISymbol[], ISymbol[]> getNotifyFn(string memberType, string key, ObjectCreationExpressionSyntax existingIgnore) {
+            Action<ISymbol[], ISymbol[]> getNotifyFn(
+                                        string memberType, 
+                                        string key, 
+                                        ImmutableDictionary<string,string> classificationDict,
+                                        ObjectCreationExpressionSyntax existingIgnore) {
                 return (missing, alreadyIgnored) =>
                 {
                     var missingNames = string.Join(";", missing.Select(x => x.Name).ToArray());
@@ -176,16 +180,25 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                                                 ? "are" 
                                                 : "is";
 
-                    var dict = (new Dictionary<string, string>() {
-                                    { key, missingNames}
-                                })
-                                .ToImmutableDictionary();
+                    var dict = classificationDict
+                                        .Add(key, missingNames)
+                                        .Add(CodeFixActionTypeDictKey, CodeFixActionAddUnmappedMembersToIgnore);
+
+                    //(new Dictionary<string, string>() {
+                    //                { key, missingNames},
+                    //                { CodeFixActionTypeDictKey, CodeFixActionAddUnmappedMembersToIgnore }
+                    //            })
+                    //            .ToImmutableDictionary();
+
+                    var additionalLocations = (new Location[] { existingIgnore?.GetLocation() })
+                                                                                    .Where(x => x != null)
+                                                                                    .ToArray();
 
                     var diag = Diagnostic.Create(
                                             MapperDefinitionMissingMemberRule,
                                             expr.CreationExpressionSyntax.GetLocation(),
-                                            new Location[] { existingIgnore.GetLocation() },
-                                            dict.Add(CodeFixActionTypeDictKey, CodeFixActionAddUnmappedMembersToIgnore),
+                                            additionalLocations,
+                                            dict,
                                             $"{memberType} member {missingNames} {verb} not mapped.");
 
                     context.ReportDiagnostic(diag);

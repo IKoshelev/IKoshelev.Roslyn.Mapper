@@ -118,7 +118,22 @@ namespace ConsoleApplication1
                         }));
             }
         }
-    }" + ClassDefinitions;
+    }
+
+namespace ConsoleApplication1
+    {
+        public class Src
+        {
+            public int A { get; set; }
+            public int B { get; set; }
+        }
+
+        public class Trg
+        {
+            public int A { get; set; }
+            public int B { get; set; }
+        }
+    }";
 
             VerifyCSharpDiagnostic(test);
         }
@@ -194,7 +209,7 @@ namespace ConsoleApplication1
                             x => x.Ignore1
                         ),
                         targetIgnoredProperties: new IgnoreList<Trg>(
-(target) => target.Ignore2)));
+(target) => target.Trg)));
             }
         }
     }" + ClassDefinitions;
@@ -234,9 +249,8 @@ namespace ConsoleApplication1
                             x => x.Ignore1,
                             x => x.B
                         ),
-                        targetIgnoredProperties: new IgnoreList<Trg>(                           
-                            x => x.B
-                        )));
+                        targetIgnoredProperties: new IgnoreList<Trg>(
+x => x.B));
             }
         }
     }" + ClassDefinitions;
@@ -275,7 +289,7 @@ namespace ConsoleApplication1
                         ),
                         targetIgnoredProperties: new IgnoreList<Trg>(
 x => x.B,
-(target) => target.Ignore2)));
+(target) => target.Trg));
             }
         }
     }" + ClassDefinitions;
@@ -283,6 +297,82 @@ x => x.B,
             VerifyCSharpFix(test, fixTest);
         }
 
+        [TestMethod]
+        public void WhenMembersAreMissingFromIgnoreACodeFixWillBeOfferedToAddThem_AddNewIgnoreListCase()
+        {
+            var test = @"
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Text;
+    using System.Threading.Tasks;
+    using System.Diagnostics;
+    using IKoshelev.Mapper; 
+
+    namespace ConsoleApplication1
+    {
+        class Test
+        {
+            public void Test()
+            {
+                var test = new ExpressionMapper<Src, Trg>(
+                    new ExpressionMappingComponents<Src, Trg>(
+                        (source) => new Trg()
+                        {
+                            A = source.A,
+                            B = source.B,
+                        },
+                        (source) => new Trg()
+                        {
+                            C = 10
+                        },
+                        sourceIgnoredProperties: new IgnoreList<Src>(
+                            x => x.Ignore1
+                        )));
+            }
+        }
+    }" + ClassDefinitions;
+
+            VerifyCSharpDiagnostic(test,
+                MappingProblem("Target member Ignore2 is not mapped.", 17, 21));
+
+            var fixTest = @"
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Text;
+    using System.Threading.Tasks;
+    using System.Diagnostics;
+    using IKoshelev.Mapper; 
+
+    namespace ConsoleApplication1
+    {
+        class Test
+        {
+            public void Test()
+            {
+                var test = new ExpressionMapper<Src, Trg>(
+                    new ExpressionMappingComponents<Src, Trg>(
+                        (source) => new Trg()
+                        {
+                            A = source.A,
+                            B = source.B,
+                        },
+                        (source) => new Trg()
+                        {
+                            C = 10
+                        },
+                        sourceIgnoredProperties: new IgnoreList<Src>(
+                            x => x.Ignore1
+                        ),
+targetIgnoredProperties: new IgnoreList<Ignore2>(
+(target) => target.Trg)));
+            }
+        }
+    }" + ClassDefinitions;
+
+            VerifyCSharpFix(test, fixTest, allowNewCompilerDiagnostics: true);
+        }
 
         [TestMethod]
         public void OnStructuralProblemItIsReporpted()
