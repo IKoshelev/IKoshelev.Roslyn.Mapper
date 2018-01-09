@@ -184,12 +184,6 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                                         .Add(key, missingNames)
                                         .Add(CodeFixActionTypeDictKey, CodeFixActionAddUnmappedMembersToIgnore);
 
-                    //(new Dictionary<string, string>() {
-                    //                { key, missingNames},
-                    //                { CodeFixActionTypeDictKey, CodeFixActionAddUnmappedMembersToIgnore }
-                    //            })
-                    //            .ToImmutableDictionary();
-
                     var additionalLocations = (new Location[] { existingIgnore?.GetLocation() })
                                                                                     .Where(x => x != null)
                                                                                     .ToArray();
@@ -558,7 +552,8 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
             return members;
         }
 
-        public static ISymbol[] ParseIgnoreList(INamedTypeSymbol ownerType, ObjectCreationExpressionSyntax ignoreSyntax, List<Diagnostic> diagnostics)
+        public static ISymbol[] 
+            ParseIgnoreList(INamedTypeSymbol ownerType, ObjectCreationExpressionSyntax ignoreSyntax, List<Diagnostic> diagnostics)
         {         
             try
             {
@@ -657,7 +652,7 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
             }           
         }
 
-            public static ISymbol GetFieldOrPropertySymbolFromSimpleLambda(INamedTypeSymbol ownerType, LambdaExpressionSyntax lambda, List<Diagnostic> diagnostics)
+        public static ISymbol GetFieldOrPropertySymbolFromSimpleLambda(INamedTypeSymbol ownerType, LambdaExpressionSyntax lambda, List<Diagnostic> diagnostics)
         {
             var lambdaText = lambda.GetText().ToString().Trim();
             string memberName = null;

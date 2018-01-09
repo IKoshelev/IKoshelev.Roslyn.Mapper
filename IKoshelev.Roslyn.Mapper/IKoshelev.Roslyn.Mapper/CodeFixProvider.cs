@@ -156,8 +156,8 @@ namespace IKoshelev.Roslyn.Mapper
             }
 
             passedProperties.TryGetValue(
-                 IKoshelevRoslynMapperAnalyzer.SourceMembersToIgnoreDictKey,
-                 out string sourceUnmappedMembers);
+                             IKoshelevRoslynMapperAnalyzer.SourceMembersToIgnoreDictKey,
+                             out string sourceUnmappedMembers);
 
 
             passedProperties.TryGetValue(
@@ -181,12 +181,12 @@ namespace IKoshelev.Roslyn.Mapper
             }
 
             passedProperties.TryGetValue(
-                IKoshelevRoslynMapperAnalyzer.TargetTypeNameDictKey,
-                out string targetTypeName);
+                            IKoshelevRoslynMapperAnalyzer.TargetTypeNameDictKey,
+                            out string targetTypeName);
 
             passedProperties.TryGetValue(
-                 IKoshelevRoslynMapperAnalyzer.TargeMembersToIgnoreDictKey,
-                 out string targetUnmappedMembers);
+                             IKoshelevRoslynMapperAnalyzer.TargeMembersToIgnoreDictKey,
+                             out string targetUnmappedMembers);
 
             if (targetUnmappedMembers != null && targetTypeName != null)
             {
@@ -214,7 +214,10 @@ namespace IKoshelev.Roslyn.Mapper
                                         string typeName,
                                         CancellationToken cancellationToken)
         {
-            var parsedMembersToAppend = membersToAppend.Split(';');
+            var parsedMembersToAppend = membersToAppend
+                                                    .Split(';')
+                                                    .Where(x => string.IsNullOrWhiteSpace(x) == false)
+                                                    .ToArray();
 
             var lambdasToAppend = parsedMembersToAppend
                                         .Select(x => $"({mappingSideType}) => {mappingSideType}.{x}")
@@ -315,6 +318,7 @@ new ExpressionMappingComponents<{sourceTypeName}, {targetTypeName}>(
             {
                 var transformed = unsplitNames?
                                             .Split(';')
+                                            .Where(x => string.IsNullOrWhiteSpace(x) == false)
                                             .Select(x => transform(x) + separator + "\r\n")
                                             .ToArray();
 
@@ -322,7 +326,10 @@ new ExpressionMappingComponents<{sourceTypeName}, {targetTypeName}>(
 
                 var lengthWithoutLastSeparator = preparedJoinedNames.Length - (separator.Length + 2);
 
-                preparedJoinedNames = preparedJoinedNames.Substring(0, lengthWithoutLastSeparator) + "\r\n";
+                if (preparedJoinedNames.Length > 0)
+                {
+                    preparedJoinedNames = preparedJoinedNames.Substring(0, lengthWithoutLastSeparator) + "\r\n";
+                }
 
                 return preparedJoinedNames;
             }
@@ -334,7 +341,10 @@ new ExpressionMappingComponents<{sourceTypeName}, {targetTypeName}>(
             string automappableMembers,
             CancellationToken cancellationToken)
         {
-            var parsedMappableMembers = automappableMembers.Split(';');
+            var parsedMappableMembers = automappableMembers
+                                                        .Split(';')
+                                                        .Where(x => string.IsNullOrWhiteSpace(x) == false)
+                                                        .ToArray();
 
             var sourceIdentifierName = lambda
                             .ChildNodes().OfType<ParameterListSyntax>().Single()

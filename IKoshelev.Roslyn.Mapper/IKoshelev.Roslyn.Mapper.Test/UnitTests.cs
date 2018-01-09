@@ -209,7 +209,7 @@ namespace ConsoleApplication1
                             x => x.Ignore1
                         ),
                         targetIgnoredProperties: new IgnoreList<Trg>(
-(target) => target.Trg)));
+(target) => target.Ignore2)));
             }
         }
     }" + ClassDefinitions;
@@ -289,7 +289,7 @@ x => x.B));
                         ),
                         targetIgnoredProperties: new IgnoreList<Trg>(
 x => x.B,
-(target) => target.Trg));
+(target) => target.Ignore2));
             }
         }
     }" + ClassDefinitions;
@@ -365,8 +365,8 @@ x => x.B,
                         sourceIgnoredProperties: new IgnoreList<Src>(
                             x => x.Ignore1
                         ),
-targetIgnoredProperties: new IgnoreList<Ignore2>(
-(target) => target.Trg)));
+targetIgnoredProperties: new IgnoreList<Trg>(
+(target) => target.Ignore2)));
             }
         }
     }" + ClassDefinitions;
@@ -556,6 +556,90 @@ new ExpressionMappingComponents<Src, Trg>(
             }
         }
     }" + ClassDefinitions;
+
+            VerifyCSharpFix(test, fixTest, allowNewCompilerDiagnostics: true);
+        }
+
+        [TestMethod]
+        public void GeneratingDefaultMappingsHasNoProblemWithEmptyClass()
+        {
+            var test = @"
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Text;
+    using System.Threading.Tasks;
+    using System.Diagnostics;
+    using IKoshelev.Mapper; 
+
+    namespace ConsoleApplication1
+    {
+        class Test
+        {
+            public void Test()
+            {
+                var test =
+new ExpressionMappingComponents<Src, Trg>();
+            }
+        }
+    }
+
+namespace ConsoleApplication1
+    {
+        public class Src
+        {
+        }
+
+        public class Trg
+        {
+        }
+    }";
+
+            VerifyCSharpDiagnostic(test,
+                StructuralProblem("\"defaultMappings\" not found.", 17, 1));
+
+            var fixTest = @"
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Text;
+    using System.Threading.Tasks;
+    using System.Diagnostics;
+    using IKoshelev.Mapper; 
+
+    namespace ConsoleApplication1
+    {
+        class Test
+        {
+            public void Test()
+            {
+                var test =
+
+new ExpressionMappingComponents<Src, Trg>(
+    defaultMappings: (Src source) => new Trg()
+    {
+    },
+    customMappings: (Src source) => new Trg()
+    {
+    },
+    sourceIgnoredProperties: new IgnoreList<Src>(
+        ),
+    targetIgnoredProperties: new IgnoreList<Trg>(
+        ));
+            }
+        }
+    }
+
+namespace ConsoleApplication1
+    {
+        public class Src
+        {
+        }
+
+        public class Trg
+        {
+        }
+    }";
 
             VerifyCSharpFix(test, fixTest, allowNewCompilerDiagnostics: true);
         }
