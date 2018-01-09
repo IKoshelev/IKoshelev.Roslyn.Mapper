@@ -352,7 +352,7 @@ x => x.B,
             public void Test()
             {
                 var test = new ExpressionMapper<Src, Trg>(
-                    new ExpressionMappingComponents<Src, Trg>(
+new ExpressionMappingComponents<Src, Trg>(
                         (source) => new Trg()
                         {
                             A = source.A,
@@ -472,11 +472,11 @@ targetIgnoredProperties: new IgnoreList<Trg>(
             {
                 var test = new ExpressionMapper<Src, Trg>(
                     new ExpressionMappingComponents<Src, Trg>(
-                        (source) => new Trg()
-                        {
-                            A = source.A,
-                            B = source.B,
-                        },
+(source) => new Trg()
+{
+    A = source.A,
+    B = source.B,
+},
                         customMappings: (source) => new Trg()
                         {
                             C = 15

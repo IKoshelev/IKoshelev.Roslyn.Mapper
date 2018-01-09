@@ -383,13 +383,19 @@ $@"new X{{
 
             var workspace = document.Project.Solution.Workspace;
 
-            var newObjectCreationFormatted = Formatter.Format(
-                                                            newNode,
-                                                            Formatter.Annotation,
-                                                            workspace,
-                                                            workspace.Options,
-                                                            cancellationToken)
-                                                            as ObjectCreationExpressionSyntax;
+            try
+            {
+                newNode = Formatter.Format(
+                                        newNode,
+                                        Formatter.Annotation,
+                                        workspace,
+                                        workspace.Options,
+                                        cancellationToken) as T;
+            }
+            catch
+            {
+                // this fails in VS 2015, igore for now
+            }
 
             var root = await document.GetSyntaxRootAsync(cancellationToken);
 
