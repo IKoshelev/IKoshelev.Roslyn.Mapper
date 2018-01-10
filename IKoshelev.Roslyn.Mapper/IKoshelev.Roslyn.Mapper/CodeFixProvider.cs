@@ -110,13 +110,13 @@ namespace IKoshelev.Roslyn.Mapper
                                 .AncestorsAndSelf().OfType<LambdaExpressionSyntax>().FirstOrDefault();
 
                 passedProperties.TryGetValue(
-                                    IKoshelevRoslynMapperAnalyzer.AutomappableMembersDictKey,
-                                    out string automappableMembers);
+                                    IKoshelevRoslynMapperAnalyzer.AutomappableMembersNotTouchedOutsideDefaulDictKey,
+                                    out string automappableMembersNotUntouchedOutsideDefault);
 
                 context.RegisterCodeFix(
                             CodeAction.Create(
                                 title: TitleRegenerateDefaultMappings,
-                                createChangedDocument: c => RegenerateDefaultMappingsAsync(context.Document, lambda, automappableMembers, c),
+                                createChangedDocument: c => RegenerateDefaultMappingsAsync(context.Document, lambda, automappableMembersNotUntouchedOutsideDefault, c),
                                 equivalenceKey: TitleRegenerateDefaultMappings),
                             diagnostic);
             }

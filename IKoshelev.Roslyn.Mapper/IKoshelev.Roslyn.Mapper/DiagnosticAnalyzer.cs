@@ -17,6 +17,7 @@ namespace IKoshelev.Roslyn.Mapper
     {
         public const string DiagnosticId = "IKoshelevRoslynMapper";
         public const string AutomappableMembersDictKey = "automappableMembers";
+        public const string AutomappableMembersNotTouchedOutsideDefaulDictKey = "AutomappableMembersNotTouchedOutsideDefaulDictKey";
         public const string NonAutomappableSourceMembersDictKey = "nonAutomappableSourceMembers";
         public const string NonAutomappableTargetMembersDictKey = "nonAutomappableTargetMembers";
         public const string SourceTypeNameDictKey = "sourceTypeNameDictKey";
@@ -207,10 +208,26 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
         {
             var membersClasification = GetSameNameFieldsAndProperties(expr.SourceTypeSymbol, expr.TargetTypeSymbol);
 
-            membersClassificationDict = PrepareMemberClassificationDictForCodeFix(
+            var dict = PrepareMemberClassificationDictForCodeFix(
                                                                             membersClasification,
                                                                             expr.SourceTypeSymbol,
                                                                             expr.TargetTypeSymbol);
+
+           var untouchedAutomappables = membersClasification.mappable
+               .Where(name =>
+               {
+                   return (expr.SymbolsMappedCustom.source.Any(x => x.Name == name) == false)
+                           && (expr.SymbolsIgnoredInSource.Any(x => x.Name == name) == false)
+                           && (expr.SymbolsMappedCustom.target.Any(x => x.Name == name) == false)
+                           && (expr.SymbolsIgnoredInTarget.Any(x => x.Name == name) == false);
+               })
+               .ToArray();
+
+            var untouchedAutomappablesJoined = string.Join(";", untouchedAutomappables);
+
+            dict = dict.Add(AutomappableMembersNotTouchedOutsideDefaulDictKey, untouchedAutomappablesJoined);
+
+            membersClassificationDict = dict;
 
             unmappedCompatibleMembers = membersClasification.mappable
                 .Where(name =>
@@ -279,7 +296,11 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
             return (mappable, nonMappableSource, nonMappableTarget);
         }
 
-        private static void CheckAndNotifyMissingMembers(INamedTypeSymbol type, ISymbol[] mapped, ISymbol[] ignored, Action<ISymbol[], ISymbol[]> notify)
+        private static void CheckAndNotifyMissingMembers(
+                                            INamedTypeSymbol type, 
+                                            ISymbol[] mapped, 
+                                            ISymbol[] ignored, 
+                                            Action<ISymbol[], ISymbol[]> notify)
         {
             var allPublicFieldsAndProps = type
                                             .GetMembers()
@@ -310,25 +331,17 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                                                   expr.IgnoreInTarget,
                                                   expr.Diagnostics);
 
-            var touchedPropsInDefault = ParseTouchedPropsFromMapping(
+            expr.SymbolsMappedDefault = ParseTouchedPropsFromMapping(
                                                     expr.SourceTypeSymbol,
                                                     expr.TargetTypeSymbol,
                                                     expr.DefaultMappings,
                                                     expr.Diagnostics);
 
-            var touchedPropsInCustom = ParseTouchedPropsFromMapping(
+            expr.SymbolsMappedCustom = ParseTouchedPropsFromMapping(
                                                     expr.SourceTypeSymbol,
                                                     expr.TargetTypeSymbol,
                                                     expr.CustomMappings,
                                                     expr.Diagnostics);
-
-            expr.SymbolsMappedInSource = touchedPropsInDefault.sourceProps
-                                            .Union(touchedPropsInCustom.sourceProps)
-                                            .ToArray();
-
-            expr.SymbolsMappedInTarget = touchedPropsInDefault.targetProps
-                                            .Union(touchedPropsInCustom.targetProps)
-                                            .ToArray();
         }
 
         private static bool NotifyDiagnostics(SymbolAnalysisContext context, ExpressionMappingComponent[] components)
@@ -726,7 +739,28 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
 
         public ISymbol[] SymbolsIgnoredInSource { get; set; }
         public ISymbol[] SymbolsIgnoredInTarget { get; set; }
-        public ISymbol[] SymbolsMappedInSource { get; set; }
-        public ISymbol[] SymbolsMappedInTarget { get; set; }
+
+        public (ISymbol[] source, ISymbol[] target) SymbolsMappedCustom { get; set; }
+
+        public (ISymbol[] source, ISymbol[] target) SymbolsMappedDefault { get; set; }
+
+        public ISymbol[] SymbolsMappedInSource
+        {
+            get
+            {
+                return SymbolsMappedDefault.source
+                                .Union(SymbolsMappedCustom.source)
+                                .ToArray();
+            }
+        }
+        public ISymbol[] SymbolsMappedInTarget
+        {
+            get
+            {
+                return SymbolsMappedDefault.target
+                                .Union(SymbolsMappedCustom.target)
+                                .ToArray();
+            }
+        }
     }
 }

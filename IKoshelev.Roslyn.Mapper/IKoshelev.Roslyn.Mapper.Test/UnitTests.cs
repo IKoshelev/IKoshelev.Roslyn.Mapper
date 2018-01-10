@@ -498,6 +498,92 @@ targetIgnoredProperties: new IgnoreList<Trg>(
         }
 
         [TestMethod]
+        public void WhenRegeneratingDefaultMembersOnlyUntouchedAreAdded()
+        {
+            var test = @"
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Text;
+    using System.Threading.Tasks;
+    using System.Diagnostics;
+    using IKoshelev.Mapper; 
+
+    namespace ConsoleApplication1
+    {
+        class Test
+        {
+            public void Test()
+            {
+                var test = new ExpressionMapper<Src, Trg>(
+                    new ExpressionMappingComponents<Src, Trg>(
+                        (source) => new Trg()
+                        {
+                        },
+                        customMappings: (source) => new Trg()
+                        {
+                            B = 10,
+                            C = 15
+                        },
+                        sourceIgnoredProperties: new IgnoreList<Src>(
+                            x => x.Ignore1,
+                            x => x.B
+                        ),
+                        targetIgnoredProperties: new IgnoreList<Trg>(
+                            (x) => x.Ignore2
+                        )));
+            }
+        }
+    }" + ClassDefinitions;
+
+            VerifyCSharpDiagnostic(test,
+                 MappingProblem("Source member A is not mapped.", 17, 21, (26, 50)),
+                 MappingProblem("Target member A is not mapped.", 17, 21, (30, 50)),
+                 MappingProblem("Some membmers with identical names are not mapped. Please choose 'Regenerate defaultMappings.'" +
+                                " or manually handle missing members: A.", 18, 25));
+
+            var fixTest = @"
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
+    using System.Text;
+    using System.Threading.Tasks;
+    using System.Diagnostics;
+    using IKoshelev.Mapper; 
+
+    namespace ConsoleApplication1
+    {
+        class Test
+        {
+            public void Test()
+            {
+                var test = new ExpressionMapper<Src, Trg>(
+                    new ExpressionMappingComponents<Src, Trg>(
+(source) => new Trg()
+{
+    A = source.A,
+},
+                        customMappings: (source) => new Trg()
+                        {
+                            B = 10,
+                            C = 15
+                        },
+                        sourceIgnoredProperties: new IgnoreList<Src>(
+                            x => x.Ignore1,
+                            x => x.B
+                        ),
+                        targetIgnoredProperties: new IgnoreList<Trg>(
+                            (x) => x.Ignore2
+                        )));
+            }
+        }
+    }" + ClassDefinitions;
+
+            VerifyCSharpFix(test, fixTest, diagnosticsIndex: 2);
+
+        }
+
+        [TestMethod]
         public void WhenMappingWithoudDefaultFoundWillOfferToGenerateAllMappings()
         {
             var test = @"
