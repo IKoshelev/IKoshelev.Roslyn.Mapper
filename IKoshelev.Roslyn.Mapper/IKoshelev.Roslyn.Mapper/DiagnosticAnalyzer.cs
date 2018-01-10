@@ -149,8 +149,8 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                                             $"Some membmers with identical names are not mapped. " +
                                             $"Please choose '{IKoshelevRoslynMapperCodeFixProvider.TitleRegenerateDefaultMappings}' or " +
                                             $"manually handle missing members: {unmappedCompatibleMembersJoined}.");
+
                 context.ReportDiagnostic(diag);
-                return;
             }
 
             CheckAndNotifyMissingMembers(
@@ -289,8 +289,9 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
 
             var missing = allPublicFieldsAndProps
                                 .Where(symbol => mapped.Contains(symbol) == false
-                                                && ignored.Contains(symbol) == false)
+                                                 && ignored.Contains(symbol) == false)
                                 .ToArray();
+
             if (missing.Any())
             {
                 notify(missing, ignored);

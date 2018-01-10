@@ -452,7 +452,9 @@ targetIgnoredProperties: new IgnoreList<Trg>(
     }" + ClassDefinitions;
 
             VerifyCSharpDiagnostic(test,
-                MappingProblem("Some membmers with identical names are not mapped. Please choose 'Regenerate defaultMappings.'"+ 
+                 MappingProblem("Source member A;B are not mapped.", 17, 21, (25, 50)),
+                 MappingProblem("Target member A;B are not mapped.", 17, 21, (28, 50)),
+                 MappingProblem("Some membmers with identical names are not mapped. Please choose 'Regenerate defaultMappings.'" +
                                 " or manually handle missing members: A;B.", 18, 25));
 
             var fixTest = @"
@@ -491,7 +493,7 @@ targetIgnoredProperties: new IgnoreList<Trg>(
         }
     }" + ClassDefinitions;
 
-            VerifyCSharpFix(test, fixTest);
+            VerifyCSharpFix(test, fixTest, diagnosticsIndex: 2);
 
         }
 

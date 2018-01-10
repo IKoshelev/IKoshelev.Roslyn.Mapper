@@ -192,7 +192,7 @@ namespace IKoshelev.Roslyn.Mapper
             {
                 context.RegisterCodeFix(
                     CodeAction.Create(
-                        title: TitleAddIgnoreMembersSource,
+                        title: TitleAddIgnoreMembersTarget,
                         createChangedDocument: c => AppendIgnoreList(context.Document,
                                                                         mappingCreation, 
                                                                         existingIgnore, 
