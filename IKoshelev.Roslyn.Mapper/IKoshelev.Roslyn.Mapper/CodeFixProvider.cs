@@ -60,159 +60,186 @@ namespace IKoshelev.Roslyn.Mapper
 
             if (codeFixAction == IKoshelevRoslynMapperAnalyzer.CodeFixActionGenerateDefaultMappings)
             {
-                var mappingCreation = root
-                        .FindToken(diagnosticSpan.Start)
-                        .Parent
-                        .AncestorsAndSelf().OfType<ObjectCreationExpressionSyntax>().FirstOrDefault();
-
-                passedProperties.TryGetValue(
-                                IKoshelevRoslynMapperAnalyzer.AutomappableMembersDictKey,
-                                out string automappableMembers);
-
-                passedProperties.TryGetValue(
-                                IKoshelevRoslynMapperAnalyzer.NonAutomappableSourceMembersDictKey,
-                                out string nonAutomappableSourceMembers);
-
-                passedProperties.TryGetValue(
-                                IKoshelevRoslynMapperAnalyzer.NonAutomappableTargetMembersDictKey,
-                                out string nonAutomappableTargetMembers);
-
-                passedProperties.TryGetValue(
-                                IKoshelevRoslynMapperAnalyzer.SourceTypeNameDictKey,
-                                out string sourceTypeName);
-
-                passedProperties.TryGetValue(
-                                IKoshelevRoslynMapperAnalyzer.TargetTypeNameDictKey,
-                                out string targetTypeName);
-
-
-                context.RegisterCodeFix(
-                   CodeAction.Create(
-                       title: TitleGenerateMappingArguments,
-                       createChangedDocument: c => RegenerateFull(
-                                                            context.Document,
-                                                            mappingCreation,
-                                                            automappableMembers,
-                                                            nonAutomappableSourceMembers,
-                                                            nonAutomappableTargetMembers,
-                                                            sourceTypeName,
-                                                            targetTypeName,
-                                                            c),
-                       equivalenceKey: TitleRegenerateDefaultMappings),
-                   diagnostic);
+                ProvideFixToGenerateFullMappingFromNothing(context, diagnostic, diagnosticSpan, passedProperties, root);
             }
 
             if (codeFixAction == IKoshelevRoslynMapperAnalyzer.CodeFixActionRegenerateDefaultMappings)
             {
-                var lambda = root
-                                .FindToken(diagnosticSpan.Start)
-                                .Parent
-                                .AncestorsAndSelf().OfType<LambdaExpressionSyntax>().FirstOrDefault();
-
-                passedProperties.TryGetValue(
-                                    IKoshelevRoslynMapperAnalyzer.AutomappableMembersNotTouchedOutsideDefaulDictKey,
-                                    out string automappableMembersNotUntouchedOutsideDefault);
-
-                context.RegisterCodeFix(
-                            CodeAction.Create(
-                                title: TitleRegenerateDefaultMappings,
-                                createChangedDocument: c => RegenerateDefaultMappingsAsync(context.Document, lambda, automappableMembersNotUntouchedOutsideDefault, c),
-                                equivalenceKey: TitleRegenerateDefaultMappings),
-                            diagnostic);
+                ProvideFixToRegenerateDefaultMappings(context, diagnostic, diagnosticSpan, passedProperties, root);
             }
 
             if (codeFixAction == IKoshelevRoslynMapperAnalyzer.CodeFixActionAddUnmappedMembersToIgnore)
             {
-                AddAppendIgnoreMembersFixesIfPossible(
-                                                    context,
-                                                    diagnostic,
-                                                    diagnosticSpan,
-                                                    passedProperties,
-                                                    root);
+                ProvideFixToAddMembersToIgnoreListsIfPossible(
+                                                            context,
+                                                            diagnostic,
+                                                            diagnosticSpan,
+                                                            passedProperties,
+                                                            root);
             }
         }
 
-        private void AddAppendIgnoreMembersFixesIfPossible(
-                                            CodeFixContext context, 
-                                            Diagnostic diagnostic, 
-                                            TextSpan diagnosticSpan, 
-                                            ImmutableDictionary<string, string> passedProperties,
-                                            SyntaxNode root)
+        private void ProvideFixToRegenerateDefaultMappings(
+                                                    CodeFixContext context,
+                                                    Diagnostic diagnostic, 
+                                                    TextSpan diagnosticSpan, 
+                                                    ImmutableDictionary<string, string> passedProperties, 
+                                                    SyntaxNode root)
         {
-            var mappingCreation = root
-                                    .FindToken(diagnosticSpan.Start)
-                                    .Parent
-                                    .AncestorsAndSelf().OfType<ObjectCreationExpressionSyntax>().FirstOrDefault();
-
-            var additionalLocation = diagnostic.AdditionalLocations?.FirstOrDefault();
-
-            ObjectCreationExpressionSyntax existingIgnore = null;
-            if (additionalLocation != null)
-            {
-                existingIgnore = root
-                                    .FindToken(additionalLocation.SourceSpan.Start)
-                                    .Parent
-                                    .AncestorsAndSelf().OfType<ObjectCreationExpressionSyntax>().FirstOrDefault();
-            }
+            var lambda = root
+                            .FindToken(diagnosticSpan.Start)
+                            .Parent
+                            .AncestorsAndSelf().OfType<LambdaExpressionSyntax>().FirstOrDefault();
 
             passedProperties.TryGetValue(
-                             IKoshelevRoslynMapperAnalyzer.SourceMembersToIgnoreDictKey,
-                             out string sourceUnmappedMembers);
+                                IKoshelevRoslynMapperAnalyzer.AutomappableMembersNotTouchedOutsideDefaulDictKey,
+                                out string automappableMembersNotUntouchedOutsideDefault);
 
+            var document = context.Document;
+
+            context.RegisterCodeFix(
+                        CodeAction.Create(
+                            title: TitleRegenerateDefaultMappings,
+                            createChangedDocument: c => RegenerateDefaultMappingsAsync(
+                                                                                    document, 
+                                                                                    lambda, 
+                                                                                    automappableMembersNotUntouchedOutsideDefault, 
+                                                                                    c),
+                            equivalenceKey: TitleRegenerateDefaultMappings),
+                        diagnostic);
+        }
+
+        private void ProvideFixToGenerateFullMappingFromNothing(
+                                                    CodeFixContext context, 
+                                                    Diagnostic diagnostic, 
+                                                    TextSpan diagnosticSpan, 
+                                                    ImmutableDictionary<string, string> passedProperties, 
+                                                    SyntaxNode root)
+        {
+            var mappingCreation = root
+                    .FindToken(diagnosticSpan.Start)
+                    .Parent
+                    .AncestorsAndSelf().OfType<ObjectCreationExpressionSyntax>().FirstOrDefault();
+
+            passedProperties.TryGetValue(
+                            IKoshelevRoslynMapperAnalyzer.AutomappableMembersDictKey,
+                            out string automappableMembers);
+
+            passedProperties.TryGetValue(
+                            IKoshelevRoslynMapperAnalyzer.NonAutomappableSourceMembersDictKey,
+                            out string nonAutomappableSourceMembers);
+
+            passedProperties.TryGetValue(
+                            IKoshelevRoslynMapperAnalyzer.NonAutomappableTargetMembersDictKey,
+                            out string nonAutomappableTargetMembers);
 
             passedProperties.TryGetValue(
                             IKoshelevRoslynMapperAnalyzer.SourceTypeNameDictKey,
                             out string sourceTypeName);
 
-            if (sourceUnmappedMembers != null && sourceTypeName != null)
-            {
-                context.RegisterCodeFix(
-                    CodeAction.Create(
-                        title: TitleAddIgnoreMembersSource,
-                        createChangedDocument: c => AppendIgnoreList(context.Document,
-                                                                        mappingCreation, 
-                                                                        existingIgnore, 
-                                                                        "source",
-                                                                        sourceUnmappedMembers,
-                                                                        sourceTypeName,                                                                   
-                                                                        c),
-                        equivalenceKey: TitleRegenerateDefaultMappings),
-                    diagnostic);
-            }
-
             passedProperties.TryGetValue(
                             IKoshelevRoslynMapperAnalyzer.TargetTypeNameDictKey,
                             out string targetTypeName);
 
-            passedProperties.TryGetValue(
-                             IKoshelevRoslynMapperAnalyzer.TargeMembersToIgnoreDictKey,
-                             out string targetUnmappedMembers);
+            var document = context.Document;
 
-            if (targetUnmappedMembers != null && targetTypeName != null)
-            {
-                context.RegisterCodeFix(
-                    CodeAction.Create(
-                        title: TitleAddIgnoreMembersTarget,
-                        createChangedDocument: c => AppendIgnoreList(context.Document,
-                                                                        mappingCreation, 
-                                                                        existingIgnore, 
-                                                                        "target", 
-                                                                        targetUnmappedMembers,
-                                                                        targetTypeName,
-                                                                        c),
-                        equivalenceKey: TitleRegenerateDefaultMappings),
-                    diagnostic);
-            }
+            context.RegisterCodeFix(
+               CodeAction.Create(
+                   title: TitleGenerateMappingArguments,
+                   createChangedDocument: c => RegenerateFull(
+                                                        document,
+                                                        mappingCreation,
+                                                        automappableMembers,
+                                                        nonAutomappableSourceMembers,
+                                                        nonAutomappableTargetMembers,
+                                                        sourceTypeName,
+                                                        targetTypeName,
+                                                        c),
+                   equivalenceKey: TitleRegenerateDefaultMappings),
+               diagnostic);
         }
 
+        private void ProvideFixToAddMembersToIgnoreListsIfPossible(
+                                                    CodeFixContext context, 
+                                                    Diagnostic diagnostic, 
+                                                    TextSpan diagnosticSpan, 
+                                                    ImmutableDictionary<string, string> passedProperties,
+                                                    SyntaxNode root)
+                {
+                    var mappingCreation = root
+                                            .FindToken(diagnosticSpan.Start)
+                                            .Parent
+                                            .AncestorsAndSelf().OfType<ObjectCreationExpressionSyntax>().FirstOrDefault();
+
+                    var additionalLocation = diagnostic.AdditionalLocations?.FirstOrDefault();
+
+                    ObjectCreationExpressionSyntax existingIgnore = null;
+                    if (additionalLocation != null)
+                    {
+                        existingIgnore = root
+                                            .FindToken(additionalLocation.SourceSpan.Start)
+                                            .Parent
+                                            .AncestorsAndSelf().OfType<ObjectCreationExpressionSyntax>().FirstOrDefault();
+                    }
+
+                    passedProperties.TryGetValue(
+                                     IKoshelevRoslynMapperAnalyzer.SourceMembersToIgnoreDictKey,
+                                     out string sourceUnmappedMembers);
+
+
+                    passedProperties.TryGetValue(
+                                    IKoshelevRoslynMapperAnalyzer.SourceTypeNameDictKey,
+                                    out string sourceTypeName);
+
+                    if (sourceUnmappedMembers != null && sourceTypeName != null)
+                    {
+                        context.RegisterCodeFix(
+                            CodeAction.Create(
+                                title: TitleAddIgnoreMembersSource,
+                                createChangedDocument: c => AppendIgnoreList(context.Document,
+                                                                                mappingCreation, 
+                                                                                existingIgnore, 
+                                                                                "source",
+                                                                                sourceUnmappedMembers,
+                                                                                sourceTypeName,                                                                   
+                                                                                c),
+                                equivalenceKey: TitleRegenerateDefaultMappings),
+                            diagnostic);
+                    }
+
+                    passedProperties.TryGetValue(
+                                    IKoshelevRoslynMapperAnalyzer.TargetTypeNameDictKey,
+                                    out string targetTypeName);
+
+                    passedProperties.TryGetValue(
+                                     IKoshelevRoslynMapperAnalyzer.TargeMembersToIgnoreDictKey,
+                                     out string targetUnmappedMembers);
+
+                    if (targetUnmappedMembers != null && targetTypeName != null)
+                    {
+                        context.RegisterCodeFix(
+                            CodeAction.Create(
+                                title: TitleAddIgnoreMembersTarget,
+                                createChangedDocument: c => AppendIgnoreList(context.Document,
+                                                                                mappingCreation, 
+                                                                                existingIgnore, 
+                                                                                "target", 
+                                                                                targetUnmappedMembers,
+                                                                                targetTypeName,
+                                                                                c),
+                                equivalenceKey: TitleRegenerateDefaultMappings),
+                            diagnostic);
+                    }
+                }
+
         private async Task<Document> AppendIgnoreList(
-                                        Document document,
-                                        ObjectCreationExpressionSyntax wholeMappingCreation,
-                                        ObjectCreationExpressionSyntax existingIgnoreList,
-                                        string mappingSideType,
-                                        string membersToAppend,
-                                        string typeName,
-                                        CancellationToken cancellationToken)
+                                            Document document,
+                                            ObjectCreationExpressionSyntax wholeMappingCreation,
+                                            ObjectCreationExpressionSyntax existingIgnoreList,
+                                            string mappingSideType,
+                                            string membersToAppend,
+                                            string typeName,
+                                            CancellationToken cancellationToken)
         {
             var parsedMembersToAppend = membersToAppend
                                                     .Split(';')
@@ -227,35 +254,13 @@ namespace IKoshelev.Roslyn.Mapper
 
             if(existingIgnoreList == null)
             {
-                var paramColon = $"{mappingSideType}IgnoredProperties";
-
-                var nameColon = SF
-                                 .NameColon(paramColon)
-                                 .WithLeadingTrivia(SF.LineFeed);
-
-                var ignoreListText =
-$@"new IgnoreList<{typeName}>(
-)";
-
-                existingIgnoreList =  SF.ParseExpression(ignoreListText) as ObjectCreationExpressionSyntax;
-                var ignoreListMarker = new SyntaxAnnotation();
-                existingIgnoreList = existingIgnoreList.WithAdditionalAnnotations(ignoreListMarker);
-
-                var newIgnoreListArgument = SF.Argument(nameColon, SF.Token(SyntaxKind.None), existingIgnoreList);
-
-                var arguments = wholeMappingCreation.ArgumentList.Arguments;
-
-                arguments = arguments.Add(newIgnoreListArgument);
-
-                var newArguemntsList =  wholeMappingCreation.ArgumentList.WithArguments(arguments);
-
-                var newMappingCreation = wholeMappingCreation.WithArgumentList(newArguemntsList);
-
-                document = await ParseSyntaxTextAndReplaceNode(document, wholeMappingCreation, newMappingCreation, cancellationToken);
-
-                var currentNodes = (await document.GetSyntaxRootAsync()).DescendantNodes();
-
-                existingIgnoreList = currentNodes.Where(node => node.HasAnnotation(ignoreListMarker)).Single() as ObjectCreationExpressionSyntax;
+                AddEmptyIgnoreList(
+                                ref document,
+                                wholeMappingCreation,
+                                out existingIgnoreList,
+                                typeName,
+                                mappingSideType,
+                                cancellationToken);
             }
 
             var existingIgnoreLambdas = existingIgnoreList
@@ -277,6 +282,45 @@ $@"new IgnoreList<{typeName}>(
             document = await ParseSyntaxTextAndReplaceNode(document, existingIgnoreList, newIgnoreList, cancellationToken);
 
             return document;
+        }
+
+        private static void AddEmptyIgnoreList(
+                                    ref Document document,
+                                    ObjectCreationExpressionSyntax wholeMappingCreation,
+                                    out ObjectCreationExpressionSyntax existingIgnoreList,
+                                    string typeName,
+                                    string mappingSideType,
+                                    CancellationToken cancellationToken)
+        {
+            var paramColon = $"{mappingSideType}IgnoredProperties";
+
+            var nameColon = SF
+                             .NameColon(paramColon)
+                             .WithLeadingTrivia(SF.LineFeed);
+
+            var ignoreListText =
+$@"new IgnoreList<{typeName}>(
+)";
+
+            existingIgnoreList = SF.ParseExpression(ignoreListText) as ObjectCreationExpressionSyntax;
+            var ignoreListMarker = new SyntaxAnnotation();
+            existingIgnoreList = existingIgnoreList.WithAdditionalAnnotations(ignoreListMarker);
+
+            var newIgnoreListArgument = SF.Argument(nameColon, SF.Token(SyntaxKind.None), existingIgnoreList);
+
+            var arguments = wholeMappingCreation.ArgumentList.Arguments;
+
+            arguments = arguments.Add(newIgnoreListArgument);
+
+            var newArguemntsList = wholeMappingCreation.ArgumentList.WithArguments(arguments);
+
+            var newMappingCreation = wholeMappingCreation.WithArgumentList(newArguemntsList);
+
+            document = ParseSyntaxTextAndReplaceNode(document, wholeMappingCreation, newMappingCreation, cancellationToken).Result;
+
+            var currentNodes = document.GetSyntaxRootAsync().Result.DescendantNodes();
+
+            existingIgnoreList = currentNodes.Where(node => node.HasAnnotation(ignoreListMarker)).Single() as ObjectCreationExpressionSyntax;
         }
 
         private async Task<Document> RegenerateFull(
@@ -336,10 +380,10 @@ new ExpressionMappingComponents<{sourceTypeName}, {targetTypeName}>(
         }
 
         private async Task<Document> RegenerateDefaultMappingsAsync(
-            Document document, 
-            LambdaExpressionSyntax lambda,
-            string automappableMembers,
-            CancellationToken cancellationToken)
+                                                            Document document, 
+                                                            LambdaExpressionSyntax lambda,
+                                                            string automappableMembers,
+                                                            CancellationToken cancellationToken)
         {
             var parsedMappableMembers = automappableMembers
                                                         .Split(';')

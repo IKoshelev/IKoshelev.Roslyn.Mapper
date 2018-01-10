@@ -209,19 +209,16 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
             var membersClasification = GetSameNameFieldsAndProperties(expr.SourceTypeSymbol, expr.TargetTypeSymbol);
 
             var dict = PrepareMemberClassificationDictForCodeFix(
-                                                                            membersClasification,
-                                                                            expr.SourceTypeSymbol,
-                                                                            expr.TargetTypeSymbol);
+                                                                membersClasification,
+                                                                expr.SourceTypeSymbol,
+                                                                expr.TargetTypeSymbol);
 
-           var untouchedAutomappables = membersClasification.mappable
-               .Where(name =>
-               {
-                   return (expr.SymbolsMappedCustom.source.Any(x => x.Name == name) == false)
-                           && (expr.SymbolsIgnoredInSource.Any(x => x.Name == name) == false)
-                           && (expr.SymbolsMappedCustom.target.Any(x => x.Name == name) == false)
-                           && (expr.SymbolsIgnoredInTarget.Any(x => x.Name == name) == false);
-               })
-               .ToArray();
+            IEnumerable<ISymbol> allSymbolsTouchedOutsideDefault = GetAllSymbolsTouchedOutsideDefault(expr);
+
+            var untouchedAutomappables =
+                    membersClasification.mappable
+                        .Where(name => allSymbolsTouchedOutsideDefault.Any(x => x.Name == name) == false)
+                        .ToArray();
 
             var untouchedAutomappablesJoined = string.Join(";", untouchedAutomappables);
 
@@ -229,13 +226,34 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
 
             membersClassificationDict = dict;
 
-            unmappedCompatibleMembers = membersClasification.mappable
-                .Where(name =>
-                {
-                    return (expr.SymbolsMappedInSource.Any(x => x.Name == name) == false)
-                            && (expr.SymbolsIgnoredInSource.Any(x => x.Name == name) == false);
-                })
-                .ToArray();
+            var handledMappableSymbols = GetSymbolsMappedOrIgnoredInSource(expr);
+
+            unmappedCompatibleMembers =
+                    membersClasification.mappable
+                        .Where(name => handledMappableSymbols.Any(x => x.Name == name) == false)
+                        .ToArray();
+        }
+
+        private static IEnumerable<ISymbol> GetSymbolsMappedOrIgnoredInSource(ExpressionMappingComponent expr)
+        {
+            return new[]
+                    {
+                        expr.SymbolsMappedInSource,
+                        expr.SymbolsIgnoredInSource
+                    }
+                    .SelectMany(x => x);
+        }
+
+        private static IEnumerable<ISymbol> GetAllSymbolsTouchedOutsideDefault(ExpressionMappingComponent expr)
+        {
+            return new[]
+                    {
+                        expr.SymbolsMappedCustom.source,
+                        expr.SymbolsIgnoredInSource,
+                        expr.SymbolsMappedCustom.target,
+                        expr.SymbolsIgnoredInTarget
+                    }
+                    .SelectMany(x => x);
         }
 
         private static ImmutableDictionary<string, string> PrepareMemberClassificationDictForCodeFix(
@@ -369,13 +387,19 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
             {
                 if(component.SourceTypeSyntax == null || component.SourceTypeSymbol == null)
                 {
-                    var diag1 = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, component.CreationExpressionSyntax.GetLocation(), "Source type could not be resolved.");
+                    var diag1 = Diagnostic.Create(
+                                                MapperDefinitionStructuralIntegrityRule, 
+                                                component.CreationExpressionSyntax.GetLocation(), 
+                                                "Source type could not be resolved.");
                     component.Diagnostics.Add(diag1);
                 }
 
                 if (component.TargetTypeSyntax == null || component.TargetTypeSymbol == null)
                 {
-                    var diag2 = Diagnostic.Create(MapperDefinitionStructuralIntegrityRule, component.CreationExpressionSyntax.GetLocation(), "Target type could not be resolved.");
+                    var diag2 = Diagnostic.Create(
+                                                MapperDefinitionStructuralIntegrityRule, 
+                                                component.CreationExpressionSyntax.GetLocation(), 
+                                                "Target type could not be resolved.");
                     component.Diagnostics.Add(diag2);
                 }
 
@@ -387,7 +411,10 @@ If they are present - they must be exactly inline defined lambdas or lambda arra
                 Diagnostic diag3 = null;
                 if (component.SourceTypeSymbol != null && component.TargetTypeSymbol != null)
                 {
-                    var membersClasification = GetSameNameFieldsAndProperties(component.SourceTypeSymbol, component.TargetTypeSymbol);
+                    var membersClasification = GetSameNameFieldsAndProperties(
+                                                                component.SourceTypeSymbol, 
+                                                                component.TargetTypeSymbol);
+
                     var membersClassificationDict = PrepareMemberClassificationDictForCodeFix(
                                                                                 membersClasification,
                                                                                 component.SourceTypeSymbol,
