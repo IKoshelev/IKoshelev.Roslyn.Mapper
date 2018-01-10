@@ -40,19 +40,7 @@ namespace ConsoleApplication1
     }
 }";
 
-        //No diagnostics expected to show up
-        [TestMethod]
-        public void OnEmptyFileNoDiagnostics()
-        {
-            var test = @"";
-
-            VerifyCSharpDiagnostic(test);
-        }
-
-        [TestMethod]
-        public void OnPropperStructureEverythingIsOk()
-        {
-            var test = @"
+        public const string PreClassBoilerplate = @"
     using System;
     using System.Collections.Generic;
     using System.Linq;
@@ -66,7 +54,26 @@ namespace ConsoleApplication1
         class Test
         {
             public void Test()
-            {
+            {";
+
+        public const string PostClassBoilerplate = @"
+            }
+        }
+    }";
+
+        //No diagnostics expected to show up
+        [TestMethod]
+        public void OnEmptyFileNoDiagnostics()
+        {
+            var test = @"";
+
+            VerifyCSharpDiagnostic(test);
+        }
+
+        [TestMethod]
+        public void OnPropperStructureEverythingIsOk()
+        {
+            var test = PreClassBoilerplate + @"
                 var test = new ExpressionMapper<Src, Trg>(
                     new ExpressionMappingComponents<Src, Trg>(
                         (source) => new Trg()
@@ -83,10 +90,9 @@ namespace ConsoleApplication1
                         ),
                         targetIgnoredProperties: new IgnoreList<Trg>(
                             x => x.Ignore2
-                        )));
-            }
-        }
-    }" + ClassDefinitions;
+                        )));" 
+                        + PostClassBoilerplate 
+                        + ClassDefinitions;
 
             VerifyCSharpDiagnostic(test);
         }
@@ -94,32 +100,16 @@ namespace ConsoleApplication1
         [TestMethod]
         public void OnlyDefaultMappingsAreRequired()
         {
-            var test = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-    using IKoshelev.Mapper; 
-
-    namespace ConsoleApplication1
-    {
-        class Test
-        {
-            public void Test()
-            {
+            var test = PreClassBoilerplate + @"
                 var test = new ExpressionMapper<Src, Trg>(
                     new ExpressionMappingComponents<Src, Trg>(
                         (source) => new Trg()
                         {
                             A = source.A,
                             B = source.B,
-                        }));
-            }
-        }
-    }
-
+                        }));" 
+                        + PostClassBoilerplate 
+                        + @"
 namespace ConsoleApplication1
     {
         public class Src
@@ -141,21 +131,7 @@ namespace ConsoleApplication1
         [TestMethod]
         public void WhenMembersAreMissingFromIgnoreACodeFixWillBeOfferedToAddThem_AddToEmptyIgnoreListCase()
         {
-            var test = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-    using IKoshelev.Mapper; 
-
-    namespace ConsoleApplication1
-    {
-        class Test
-        {
-            public void Test()
-            {
+            var test = PreClassBoilerplate + @"
                 var test = new ExpressionMapper<Src, Trg>(
                     new ExpressionMappingComponents<Src, Trg>(
                         (source) => new Trg()
@@ -171,29 +147,14 @@ namespace ConsoleApplication1
                             x => x.Ignore1
                         ),
                         targetIgnoredProperties: new IgnoreList<Trg>(                           
-                        )));
-            }
-        }
-    }" + ClassDefinitions;
+                        )));"
+                        + PostClassBoilerplate
+                        + ClassDefinitions;
 
             VerifyCSharpDiagnostic(test,
                 MappingProblem("Target member Ignore2 is not mapped.", 17, 21, (30, 50)));
 
-            var fixTest = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-    using IKoshelev.Mapper; 
-
-    namespace ConsoleApplication1
-    {
-        class Test
-        {
-            public void Test()
-            {
+            var fixTest = PreClassBoilerplate + @"
                 var test = new ExpressionMapper<Src, Trg>(
                     new ExpressionMappingComponents<Src, Trg>(
                         (source) => new Trg()
@@ -209,10 +170,9 @@ namespace ConsoleApplication1
                             x => x.Ignore1
                         ),
                         targetIgnoredProperties: new IgnoreList<Trg>(
-(target) => target.Ignore2)));
-            }
-        }
-    }" + ClassDefinitions;
+(target) => target.Ignore2)));"
+                        + PostClassBoilerplate
+                        + ClassDefinitions;
 
             VerifyCSharpFix(test, fixTest);
         }
@@ -220,21 +180,7 @@ namespace ConsoleApplication1
         [TestMethod]
         public void WhenMembersAreMissingFromIgnoreACodeFixWillBeOfferedToAddThem_AddToNonEmptyIgnoreListCase()
         {
-            var test = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-    using IKoshelev.Mapper; 
-
-    namespace ConsoleApplication1
-    {
-        class Test
-        {
-            public void Test()
-            {
+            var test = PreClassBoilerplate + @"
                 var test = new ExpressionMapper<Src, Trg>(
                     new ExpressionMappingComponents<Src, Trg>(
                         (source) => new Trg()
@@ -250,29 +196,14 @@ namespace ConsoleApplication1
                             x => x.B
                         ),
                         targetIgnoredProperties: new IgnoreList<Trg>(
-x => x.B));
-            }
-        }
-    }" + ClassDefinitions;
+x => x.B));"
+                        + PostClassBoilerplate
+                        + ClassDefinitions;
 
             VerifyCSharpDiagnostic(test,
                 MappingProblem("Target member Ignore2 is not mapped.", 17, 21, (30, 50)));
 
-            var fixTest = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-    using IKoshelev.Mapper; 
-
-    namespace ConsoleApplication1
-    {
-        class Test
-        {
-            public void Test()
-            {
+            var fixTest = PreClassBoilerplate + @"
                 var test = new ExpressionMapper<Src, Trg>(
                     new ExpressionMappingComponents<Src, Trg>(
                         (source) => new Trg()
@@ -289,10 +220,9 @@ x => x.B));
                         ),
                         targetIgnoredProperties: new IgnoreList<Trg>(
 x => x.B,
-(target) => target.Ignore2));
-            }
-        }
-    }" + ClassDefinitions;
+(target) => target.Ignore2));"
+                        + PostClassBoilerplate
+                        + ClassDefinitions;
 
             VerifyCSharpFix(test, fixTest);
         }
@@ -300,21 +230,7 @@ x => x.B,
         [TestMethod]
         public void WhenMembersAreMissingFromIgnoreACodeFixWillBeOfferedToAddThem_AddNewIgnoreListCase()
         {
-            var test = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-    using IKoshelev.Mapper; 
-
-    namespace ConsoleApplication1
-    {
-        class Test
-        {
-            public void Test()
-            {
+            var test = PreClassBoilerplate + @"
                 var test = new ExpressionMapper<Src, Trg>(
                     new ExpressionMappingComponents<Src, Trg>(
                         (source) => new Trg()
@@ -328,29 +244,14 @@ x => x.B,
                         },
                         sourceIgnoredProperties: new IgnoreList<Src>(
                             x => x.Ignore1
-                        )));
-            }
-        }
-    }" + ClassDefinitions;
+                        )));"
+                        + PostClassBoilerplate
+                        + ClassDefinitions;
 
             VerifyCSharpDiagnostic(test,
                 MappingProblem("Target member Ignore2 is not mapped.", 17, 21));
 
-            var fixTest = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-    using IKoshelev.Mapper; 
-
-    namespace ConsoleApplication1
-    {
-        class Test
-        {
-            public void Test()
-            {
+            var fixTest = PreClassBoilerplate + @"
                 var test = new ExpressionMapper<Src, Trg>(
 new ExpressionMappingComponents<Src, Trg>(
                         (source) => new Trg()
@@ -366,10 +267,9 @@ new ExpressionMappingComponents<Src, Trg>(
                             x => x.Ignore1
                         ),
 targetIgnoredProperties: new IgnoreList<Trg>(
-(target) => target.Ignore2)));
-            }
-        }
-    }" + ClassDefinitions;
+(target) => target.Ignore2)));"
+                        + PostClassBoilerplate
+                        + ClassDefinitions;
 
             VerifyCSharpFix(test, fixTest, allowNewCompilerDiagnostics: true);
         }
@@ -377,21 +277,7 @@ targetIgnoredProperties: new IgnoreList<Trg>(
         [TestMethod]
         public void OnStructuralProblemItIsReporpted()
         {
-            var test = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-    using IKoshelev.Mapper; 
-
-    namespace ConsoleApplication1
-    {
-        class Test
-        {
-            public void Test()
-            {
+            var test = PreClassBoilerplate + @"
                 var bad =  new Expression<Func<Src, object>>[0];
 
                 var test = new ExpressionMapper<Src, Trg>(
@@ -417,21 +303,7 @@ targetIgnoredProperties: new IgnoreList<Trg>(
         [TestMethod]
         public void WhenMissingMappingsFoundAFixWillBeProposedForCompatibleMembers()
         {
-            var test = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-    using IKoshelev.Mapper; 
-
-    namespace ConsoleApplication1
-    {
-        class Test
-        {
-            public void Test()
-            {
+            var test = PreClassBoilerplate + @"
                 var test = new ExpressionMapper<Src, Trg>(
                     new ExpressionMappingComponents<Src, Trg>(
                         (source) => new Trg()
@@ -446,10 +318,9 @@ targetIgnoredProperties: new IgnoreList<Trg>(
                         ),
                         targetIgnoredProperties: new IgnoreList<Trg>(
                             (x) => x.Ignore2
-                        )));
-            }
-        }
-    }" + ClassDefinitions;
+                        )));"
+                        + PostClassBoilerplate
+                        + ClassDefinitions;
 
             VerifyCSharpDiagnostic(test,
                  MappingProblem("Source member A;B are not mapped.", 17, 21, (25, 50)),
@@ -457,21 +328,7 @@ targetIgnoredProperties: new IgnoreList<Trg>(
                  MappingProblem("Some membmers with identical names are not mapped. Please choose 'Regenerate defaultMappings.'" +
                                 " or manually handle missing members: A;B.", 18, 25));
 
-            var fixTest = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-    using IKoshelev.Mapper; 
-
-    namespace ConsoleApplication1
-    {
-        class Test
-        {
-            public void Test()
-            {
+            var fixTest = PreClassBoilerplate + @"
                 var test = new ExpressionMapper<Src, Trg>(
                     new ExpressionMappingComponents<Src, Trg>(
 (source) => new Trg()
@@ -488,10 +345,9 @@ targetIgnoredProperties: new IgnoreList<Trg>(
                         ),
                         targetIgnoredProperties: new IgnoreList<Trg>(
                             (x) => x.Ignore2
-                        )));
-            }
-        }
-    }" + ClassDefinitions;
+                        )));"
+                        + PostClassBoilerplate
+                        + ClassDefinitions;
 
             VerifyCSharpFix(test, fixTest, diagnosticsIndex: 2);
 
@@ -500,21 +356,7 @@ targetIgnoredProperties: new IgnoreList<Trg>(
         [TestMethod]
         public void WhenRegeneratingDefaultMembersOnlyUntouchedAreAdded()
         {
-            var test = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-    using IKoshelev.Mapper; 
-
-    namespace ConsoleApplication1
-    {
-        class Test
-        {
-            public void Test()
-            {
+            var test = PreClassBoilerplate + @"
                 var test = new ExpressionMapper<Src, Trg>(
                     new ExpressionMappingComponents<Src, Trg>(
                         (source) => new Trg()
@@ -531,10 +373,9 @@ targetIgnoredProperties: new IgnoreList<Trg>(
                         ),
                         targetIgnoredProperties: new IgnoreList<Trg>(
                             (x) => x.Ignore2
-                        )));
-            }
-        }
-    }" + ClassDefinitions;
+                        )));"
+                        + PostClassBoilerplate
+                        + ClassDefinitions;
 
             VerifyCSharpDiagnostic(test,
                  MappingProblem("Source member A is not mapped.", 17, 21, (26, 50)),
@@ -542,21 +383,7 @@ targetIgnoredProperties: new IgnoreList<Trg>(
                  MappingProblem("Some membmers with identical names are not mapped. Please choose 'Regenerate defaultMappings.'" +
                                 " or manually handle missing members: A.", 18, 25));
 
-            var fixTest = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-    using IKoshelev.Mapper; 
-
-    namespace ConsoleApplication1
-    {
-        class Test
-        {
-            public void Test()
-            {
+            var fixTest = PreClassBoilerplate + @"
                 var test = new ExpressionMapper<Src, Trg>(
                     new ExpressionMappingComponents<Src, Trg>(
 (source) => new Trg()
@@ -574,10 +401,9 @@ targetIgnoredProperties: new IgnoreList<Trg>(
                         ),
                         targetIgnoredProperties: new IgnoreList<Trg>(
                             (x) => x.Ignore2
-                        )));
-            }
-        }
-    }" + ClassDefinitions;
+                        )));"
+                        + PostClassBoilerplate
+                        + ClassDefinitions;
 
             VerifyCSharpFix(test, fixTest, diagnosticsIndex: 2);
 
@@ -586,21 +412,7 @@ targetIgnoredProperties: new IgnoreList<Trg>(
         [TestMethod]
         public void WhenMappingWithoudDefaultFoundWillOfferToGenerateAllMappings()
         {
-            var test = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-    using IKoshelev.Mapper; 
-
-    namespace ConsoleApplication1
-    {
-        class Test
-        {
-            public void Test()
-            {
+            var test = PreClassBoilerplate + @"
                 var test = new ExpressionMappingComponents<Src, Trg>();
             }
         }
@@ -609,21 +421,7 @@ targetIgnoredProperties: new IgnoreList<Trg>(
             VerifyCSharpDiagnostic(test,
                 StructuralProblem("\"defaultMappings\" not found.", 16, 28));
 
-            var fixTest = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-    using IKoshelev.Mapper; 
-
-    namespace ConsoleApplication1
-    {
-        class Test
-        {
-            public void Test()
-            {
+            var fixTest = PreClassBoilerplate + @"
                 var test =
 new ExpressionMappingComponents<Src, Trg>(
     defaultMappings: (Src source) => new Trg()
@@ -640,10 +438,9 @@ new ExpressionMappingComponents<Src, Trg>(
     targetIgnoredProperties: new IgnoreList<Trg>(
         (Trg target) => target.C,
 (Trg target) => target.Ignore2
-));
-            }
-        }
-    }" + ClassDefinitions;
+));"
+                        + PostClassBoilerplate
+                        + ClassDefinitions;
 
             VerifyCSharpFix(test, fixTest, allowNewCompilerDiagnostics: true);
         }
@@ -651,26 +448,7 @@ new ExpressionMappingComponents<Src, Trg>(
         [TestMethod]
         public void GeneratingDefaultMappingsHasNoProblemWithEmptyClass()
         {
-            var test = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-    using IKoshelev.Mapper; 
-
-    namespace ConsoleApplication1
-    {
-        class Test
-        {
-            public void Test()
-            {
-                var test =
-new ExpressionMappingComponents<Src, Trg>();
-            }
-        }
-    }
+            var emptyClass = @"
 
 namespace ConsoleApplication1
     {
@@ -683,24 +461,16 @@ namespace ConsoleApplication1
         }
     }";
 
+            var test = PreClassBoilerplate + @"
+                var test =
+new ExpressionMappingComponents<Src, Trg>();"
+                        + PostClassBoilerplate
+                        + emptyClass;
+
             VerifyCSharpDiagnostic(test,
                 StructuralProblem("\"defaultMappings\" not found.", 17, 1));
 
-            var fixTest = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-    using IKoshelev.Mapper; 
-
-    namespace ConsoleApplication1
-    {
-        class Test
-        {
-            public void Test()
-            {
+            var fixTest = PreClassBoilerplate + @"
                 var test =
 
 new ExpressionMappingComponents<Src, Trg>(
@@ -713,21 +483,9 @@ new ExpressionMappingComponents<Src, Trg>(
     sourceIgnoredProperties: new IgnoreList<Src>(
         ),
     targetIgnoredProperties: new IgnoreList<Trg>(
-        ));
-            }
-        }
-    }
-
-namespace ConsoleApplication1
-    {
-        public class Src
-        {
-        }
-
-        public class Trg
-        {
-        }
-    }";
+        ));"
+                + PostClassBoilerplate
+                + emptyClass;
 
             VerifyCSharpFix(test, fixTest, allowNewCompilerDiagnostics: true);
         }
@@ -735,21 +493,7 @@ namespace ConsoleApplication1
         [TestMethod]
         public void AnalyzersCorrectlyPicksUpMembersTouchedInNonSimpleWaysInCustomMapings()
         {
-            var test = @"
-    using System;
-    using System.Collections.Generic;
-    using System.Linq;
-    using System.Text;
-    using System.Threading.Tasks;
-    using System.Diagnostics;
-    using IKoshelev.Mapper; 
-
-    namespace ConsoleApplication1
-    {
-        class Test
-        {
-            public void Test()
-            {
+            var test = PreClassBoilerplate + @"
                 var test = new ExpressionMapper<Src, Trg>(
                     new ExpressionMappingComponents<Src, Trg>(
                         (source) => new Trg()
@@ -766,10 +510,9 @@ namespace ConsoleApplication1
                         ),
                         targetIgnoredProperties: new IgnoreList<Trg>(
                             x => x.Ignore2
-                        )));
-            }
-        }
-    }" + ClassDefinitions;
+                        )));"
+                        + PostClassBoilerplate
+                        + ClassDefinitions;
 
             VerifyCSharpDiagnostic(test);
 
