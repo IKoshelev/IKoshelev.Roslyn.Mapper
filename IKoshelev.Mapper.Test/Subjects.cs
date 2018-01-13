@@ -29,4 +29,16 @@ namespace IKoshelev.Mapper.Test
         public int C { get; set; }
         public Bar E { get; set; }
     }
+
+    public class Foo1
+    {
+        public int F { get; set; }
+        public Foo Foo { get; set; }
+    }
+
+    public class Bar1
+    {
+        public int F { get; set; }
+        public Bar Bar { get; set; }
+    }
 }

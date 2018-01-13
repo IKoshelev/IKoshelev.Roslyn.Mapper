@@ -1,4 +1,5 @@
-﻿using NUnit.Framework;
+﻿using LinqKit;
+using NUnit.Framework;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -79,6 +80,60 @@ namespace IKoshelev.Mapper.Test
             Assert.AreEqual(existing.B, 10);
             Assert.AreEqual(existing.C, 15);
             Assert.AreEqual(existing.E, null);
+        }
+
+        [Test]
+        public void ExpressionMapper_MappingsCanBeNested()
+        {
+            var foo1 = new Foo1()
+            {
+                F = 20,
+                Foo = new Foo()
+                {
+                    A = 5,
+                    B = 10
+                }
+            };
+
+            var mappingsNested = new ExpressionMappingComponents<Foo, Bar>(
+                    defaultMappings: (Foo source) => new Bar()
+                    {
+                        A = source.A,
+                        B = source.B,
+                    },
+                    customMappings: (source) => new Bar()
+                    {
+                        C = 15
+                    },
+                    targetIgnoredProperties: new IgnoreList<Bar>(
+                        x => x.A
+                    ));
+
+            var FooToBarExpression = mappingsNested.CombinedMappingsWithConstructor;
+
+            var mapper = new ExpressionMapper<Foo1, Bar1>(
+                            new ExpressionMappingComponents<Foo1, Bar1>(
+                                defaultMappings: (Foo1 source) => new Bar1()
+                                {
+                                    F = source.F,
+                                    Bar = FooToBarExpression.Invoke(source.Foo),
+                                }));
+
+            var @new = mapper.Map(foo1);
+            Assert.AreEqual(@new.F, 20);
+            Assert.AreEqual(@new.Bar.A, 5);
+            Assert.AreEqual(@new.Bar.B, 10);
+            Assert.AreEqual(@new.Bar.C, 15);
+            Assert.AreEqual(@new.Bar.E, null);
+
+            var existing = new Bar1();
+
+            mapper.Map(foo1, existing);
+            Assert.AreEqual(existing.F, 20);
+            Assert.AreEqual(existing.Bar.A, 5);
+            Assert.AreEqual(existing.Bar.B, 10);
+            Assert.AreEqual(existing.Bar.C, 15);
+            Assert.AreEqual(existing.Bar.E, null);
         }
 
         [Test]
